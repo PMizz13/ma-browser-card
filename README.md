@@ -52,6 +52,9 @@ A Music Assistant browser card for Home Assistant. Browse your music library - a
 Go to **Settings → Devices & Services → Music Assistant → Configure**. Look at the URL in your browser, it will contain something like
 config_entry=01JNBHFPQSJY03ANJ6XXF053W2. That string is your `config_entry_id`.
 
+### Setting Your Width
+Create a grid card with 1 column (or multiple if desired) and place this card inside it. This is the easiest way to control how wide you want the card to be.
+
 ### Getting an MA access token (optional)
 
 The `ma_token` is only needed for the **Recently Played** section on the home screen. Without it everything else works fine.
