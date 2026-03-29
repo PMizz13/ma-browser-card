@@ -1,2 +1,135 @@
-# ma-browser-card
-A Music Assistant Lovelace Card for Home Assistant Dashboards
+# MA Browser Card
+
+A Music Assistant browser card for Home Assistant. Browse your music library - albums, artists, tracks, playlists and radio stations - with full artwork, search, queue view and playback controls, all within a single Lovelace card.
+
+![MA Browser Card screenshot](screenshot.png)
+
+# Disclaimer
+ **Use at your own risk.** This is a personal project shared freely with the community. It is not affiliated with, endorsed by, or supported by Music Assistant or Nabu Casa. I make no guarantees about stability, accuracy or fitness for any particular purpose, and take no responsibility for anything that may go wrong as a result of using it. Always back up your Home Assistant configuration before installing custom components.
+
+## Features
+
+- Browse up to 500 albums, artists, tracks, playlists and radio stations
+- Global search across your entire library from any view
+- Favourited radio stations from Music Assistant
+- Recently played, recently added and discover sections on the home screen
+- Click any album or track to play immediately
+- Right-click for Play now / Shuffle play / Play next / Add to queue
+- Full queue view with artwork - click the now-playing artwork to open
+- Shuffle and repeat controls
+- Volume slider
+- Album art with lazy loading - no performance impact on large libraries
+- Library caching for instant navigation after first load
+
+## Requirements
+
+- [Home Assistant](https://www.home-assistant.io/) with [HACS](https://hacs.xyz/)
+- [Music Assistant](https://music-assistant.io/) server (v2.8+)
+- Music Assistant Home Assistant integration installed
+
+## Installation via HACS
+
+1. Open HACS in Home Assistant
+2. Go to **Frontend**
+3. Click **⋮** → **Custom Repositories**
+4. Add `https://github.com/YOUR_GITHUB_USERNAME/ma-browser-card` as a **Lovelace** repository
+5. Find **MA Browser Card** in the list and click **Download**
+6. Restart Home Assistant
+
+## Manual Installation
+
+1. Download `ma-browser-card.js` from the [latest release](https://github.com/YOUR_GITHUB_USERNAME/ma-browser-card/releases/latest)
+2. Copy it to `/config/www/ma-browser-card.js` on your HA instance
+3. In HA go to **Settings → Dashboards → ⋮ → Resources → Add Resource**
+   - URL: `/local/ma-browser-card.js`
+   - Type: **JavaScript Module**
+4. Reload the browser
+
+## Configuration
+
+### Finding your `config_entry_id`
+
+Go to **Settings → Devices & Services → Music Assistant → Configure**. Look at the URL in your browser, it will contain something like
+config_entry=01JNBHFPQSJY03ANJ6XXF053W2. That string is your `config_entry_id`.
+
+### Getting an MA access token (optional)
+
+The `ma_token` is only needed for the **Recently Played** section on the home screen. Without it everything else works fine.
+
+1. Open the Music Assistant UI
+2. Click the profile icon (top right)
+3. Go to **Access Tokens**
+4. Create a new token and copy it
+
+### Minimal config
+
+```yaml
+type: custom:ma-browser-card
+config_entry_id: 01JNBHFPQSJY03ANJ6XXF053W2
+ma_url: http://192.168.1.x:8095
+```
+
+### Full config
+
+```yaml
+type: custom:ma-browser-card
+config_entry_id: 01JNBHFPQSJY03ANJ6XXF053W2
+ma_url: http://192.168.1.x:8095
+ma_token: eyJ...               # Optional — enables Recently Played section
+height: 580                    # Card height in pixels (default: 580)
+players:                       # Optional — limit to specific MA players
+  - media_player.kitchen_speaker    # If omitted, auto-detects all MA players
+  - media_player.living_room
+```
+
+### Config options
+
+| Option            | Required | Default | Description                                                      |
+| ----------------- | -------- | ------- | ---------------------------------------------------------------- |
+| `config_entry_id` | Yes      | -       | Your MA integration config entry ID                              |
+| `ma_url`          | Yes      | -       | URL of your MA server, e.g. `http://192.168.1.x:8095`            |
+| `ma_token`        | No       | -       | MA access token — enables Recently Played                        |
+| `height`          | No       | `580`   | Card height in pixels                                            |
+| `players`         | No       | auto    | List of `media_player` entity IDs to show in the player selector |
+
+## Usage
+
+### Browsing
+Use the sidebar to navigate between Home, Saved Radio, Albums, Artists, Tracks and Playlists.
+
+### Playing
+- **Click** any album, radio station or track to play it on the selected player
+- **Right-click** (or long-press on mobile) for more options: Play now, Shuffle play, Play next, Add to queue
+
+### Search
+Type in the search bar at the top to search across Albums, Artists, Tracks, Radio and Playlists simultaneously. Use the Play all and Shuffle all buttons that appear in each search result section in addition to the standard controls.
+
+### Queue
+Click the now-playing artwork or track title in the sidebar to open the full queue view. It shows the last 3 played tracks and all upcoming tracks with artwork.
+
+### Player selector
+Use the dropdown in the sidebar to switch between MA players. The volume slider and playback controls all apply to the selected player.
+
+## Notes
+
+- The `ma_token` is stored in plaintext in your Lovelace config. Treat it like a password — don't share your dashboard YAML publicly if it contains your token.
+- Library browsing loads up to 500 items per section. Search covers your full library regardless of this limit.
+- The card uses a WebSocket connection directly to your MA server for Recently Played data and the queue view. This requires `ma_url` and `ma_token` to be set.
+
+## Troubleshooting
+
+**No players showing in the dropdown**
+Add a `players:` list to your config with the exact entity IDs from Developer Tools → States.
+
+**No artwork showing**
+Check that your MA server is reachable at the `ma_url` you configured. Artwork is fetched directly from MA.
+
+**Recently Played section missing**
+Add `ma_token` to your config. Without it the section is skipped silently.
+
+**Card not loading**
+Check the browser console (F12) for errors. Make sure the resource is registered as a JavaScript Module (not a regular JS file).
+
+## Credits
+
+Built using the [Music Assistant](https://music-assistant.io/) WebSocket and HA service APIs.
