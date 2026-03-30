@@ -83,6 +83,7 @@ height: 580                    # Card height in pixels (default: 580)
 players:                       # Optional — limit to specific MA players
   - media_player.kitchen_speaker    # If omitted, auto-detects all MA players
   - media_player.living_room
+theme: auto
 ```
 
 ### Config options
@@ -94,6 +95,7 @@ players:                       # Optional — limit to specific MA players
 | `ma_token`        | No       | -       | MA access token — enables Recently Played                        |
 | `height`          | No       | `580`   | Card height in pixels                                            |
 | `players`         | No       | auto    | List of `media_player` entity IDs to show in the player selector |
+| `theme`           | No       | dark    | Theme for card, e.g. dark, light, auto (use Home Assistant theme)|
 
 ## Usage
 
@@ -129,6 +131,9 @@ Check that your MA server is reachable at the `ma_url` you configured. Artwork i
 
 **Recently Played section missing**
 Add `ma_token` to your config. Without it the section is skipped silently.
+
+**Recently Played section not changing**
+A known bug in Music Assistant where certain players do not track played tracks. You will need to wait on a fix from Music Assistant.
 
 **Card not loading**
 Check the browser console (F12) for errors. Make sure the resource is registered as a JavaScript Module (not a regular JS file).
