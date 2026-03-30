@@ -1,6 +1,6 @@
 /**
- * MA Browser Card  v2.0.0
- * A Plex-inspired Music Assistant browser card for Home Assistant
+ * MA Browser Card  v2.1.0
+ * A Music Assistant browser card for Home Assistant
  *
  * Installation:
  *   1. Copy ma-browser-card.js to /config/www/ma-browser-card.js
