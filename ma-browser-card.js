@@ -1,6 +1,6 @@
 /**
  * MA Browser Card  v2.0.0
- * A Music Assistant browser card for Home Assistant
+ * A Plex-inspired Music Assistant browser card for Home Assistant
  *
  * Installation:
  *   1. Copy ma-browser-card.js to /config/www/ma-browser-card.js
@@ -13,12 +13,13 @@
  *   config_entry_id: YOUR_MA_CONFIG_ENTRY_ID
  *   ma_url: http://YOUR_MA_IP:8095
  *
- * Full config options:
+  * Full config options:
  *   type: custom:ma-browser-card
  *   config_entry_id: 01JXXX...         # HA → Settings → Devices & Services → Music Assistant → Configure (check the URL)
- *   ma_url: http://192.168.x.x:8095    # Your Music Assistant server URL
+ *   ma_url: http://192.168.1.x:8095    # Your Music Assistant server URL
  *   ma_token: eyJ...                   # MA Settings → Profile → Access Tokens (optional but enables Recently Played)
  *   height: 580                         # Card height in px (default: 580)
+ *   theme: dark                         # Theme: dark (default), light, or auto (follows HA theme)
  *   players:                            # Optional: limit to specific MA player entities
  *     - media_player.my_speaker
  *     - media_player.kitchen
@@ -29,12 +30,15 @@ const CSS = `
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   .card {
+    /* ── Dark theme (default) ── */
     --gold: #e5a00d;
     --gold-bg: rgba(229,160,13,0.13);
     --gold-border: rgba(229,160,13,0.25);
     --bg0: #111113;
     --bg2: #222228;
     --bg3: #2e2e38;
+    --bg-sidebar: #0d0d10;
+    --bg-player: #09090e;
     --t1: #f0f0f5;
     --t2: #9898aa;
     --t3: #55555f;
@@ -51,9 +55,51 @@ const CSS = `
     position: relative;
   }
 
+  /* ── Light theme ── */
+  .card.theme-light {
+    --gold: var(--primary-color, #e5a00d);
+    --gold-bg: color-mix(in srgb, var(--primary-color, #e5a00d) 12%, transparent);
+    --gold-border: color-mix(in srgb, var(--primary-color, #e5a00d) 30%, transparent);
+    --bg0: #f5f5f7;
+    --bg2: #ffffff;
+    --bg3: #e8e8ee;
+    --t1: #111113;
+    --t2: #55555f;
+    --t3: #9898aa;
+    --border: rgba(0,0,0,0.08);
+  }
+  .card.theme-light {
+    --bg-sidebar: #ebebef;
+    --bg-player: #e0e0e6;
+  }
+  .card.theme-light .logo { border-bottom-color: rgba(0,0,0,0.08); }
+  .card.theme-light .nav-btn.active { background: var(--gold-bg); }
+  .card.theme-light .ctx-menu { background: #ffffff; }
+  .card.theme-light .queue-panel { background: #f0f0f4; }
+
+  /* ── Auto theme (follows HA theme) ── */
+  .card.theme-auto {
+    --gold: var(--primary-color, #e5a00d);
+    --gold-bg: color-mix(in srgb, var(--primary-color, #e5a00d) 12%, transparent);
+    --gold-border: color-mix(in srgb, var(--primary-color, #e5a00d) 30%, transparent);
+    --bg0: var(--primary-background-color, #111113);
+    --bg2: var(--card-background-color, #222228);
+    --bg3: var(--secondary-background-color, #2e2e38);
+    --t1: var(--primary-text-color, #f0f0f5);
+    --t2: var(--secondary-text-color, #9898aa);
+    --t3: var(--disabled-text-color, #55555f);
+    --border: var(--divider-color, rgba(255,255,255,0.07));
+  }
+  .card.theme-auto {
+    --bg-sidebar: var(--sidebar-background-color, var(--primary-background-color, #0d0d10));
+    --bg-player: var(--sidebar-background-color, var(--primary-background-color, #09090e));
+  }
+  .card.theme-auto .ctx-menu { background: var(--card-background-color, #1a1a22); }
+
+
   /* ── SIDEBAR ── */
   .sidebar {
-    width: var(--sidebar); background: #0d0d10;
+    width: var(--sidebar); background: var(--bg-sidebar);
     display: flex; flex-direction: column; flex-shrink: 0;
     border-right: 1px solid var(--border);
   }
@@ -84,7 +130,7 @@ const CSS = `
   .nav-ico { width: 16px; text-align: center; font-size: 14px; flex-shrink: 0; }
 
   /* ── PLAYER BAR ── */
-  .player-bar { padding: 11px; border-top: 1px solid var(--border); background: #09090e; }
+  .player-bar { padding: 11px; border-top: 1px solid var(--border); background: var(--bg-player); }
   .np-row { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; cursor: pointer; }
   .np-art {
     width: 38px; height: 38px; border-radius: 6px; background: var(--bg3);
@@ -252,7 +298,7 @@ const CSS = `
 
   /* ── CONTEXT MENU ── */
   .ctx-menu {
-    position: fixed; background: #1a1a22; border: 1px solid var(--border);
+    position: fixed; background: var(--bg2); border: 1px solid var(--border);
     border-radius: 9px; padding: 5px; z-index: 999; min-width: 160px;
     box-shadow: 0 8px 24px rgba(0,0,0,0.6);
   }
@@ -266,7 +312,7 @@ const CSS = `
 
   /* ── QUEUE PANEL ── */
   .queue-panel {
-    position: absolute; inset: 0; background: #0d0d10;
+    position: absolute; inset: 0; background: var(--bg-sidebar);
     display: flex; flex-direction: column; z-index: 10;
     animation: slideUp 0.2s ease;
   }
@@ -433,37 +479,39 @@ class MABrowserCard extends HTMLElement {
   _build() {
     const height = this._config.height || 580;
     if (this._config.columns) this.style.gridColumn = `span ${this._config.columns}`;
+    const theme = this._config.theme || 'dark';
+    const themeClass = theme === 'light' ? 'theme-light' : theme === 'auto' ? 'theme-auto' : '';
 
     this.shadowRoot.innerHTML = `<style>${CSS}</style>
-    <div class="card" style="--card-height:${height}px">
+    <div class="card ${themeClass}" style="--card-height:${height}px">
       <div class="sidebar">
         <div class="logo">
-          <div class="logo-icon">▶</div>
+          <div class="logo-icon">▶︎</div>
           <div><div class="logo-name">Music</div><div class="logo-sub">Music Assistant</div></div>
         </div>
         <nav class="nav">
           <div class="nav-label">Library</div>
-          <button class="nav-btn active" data-view="home"><span class="nav-ico">⌂</span>Home</button>
-          <button class="nav-btn" data-view="radio"><span class="nav-ico">📻</span>Radio</button>
-          <button class="nav-btn" data-view="albums"><span class="nav-ico">◉</span>Albums</button>
-          <button class="nav-btn" data-view="artists"><span class="nav-ico">♪</span>Artists</button>
-          <button class="nav-btn" data-view="tracks"><span class="nav-ico">♫</span>Tracks</button>
-          <button class="nav-btn" data-view="playlists"><span class="nav-ico">☰</span>Playlists</button>
+          <button class="nav-btn active" data-view="home"><span class="nav-ico">⌂︎</span>Home</button>
+          <button class="nav-btn" data-view="radio"><span class="nav-ico">∿︎</span>Radio</button>
+          <button class="nav-btn" data-view="albums"><span class="nav-ico">◉︎</span>Albums</button>
+          <button class="nav-btn" data-view="artists"><span class="nav-ico">♪︎</span>Artists</button>
+          <button class="nav-btn" data-view="tracks"><span class="nav-ico">♫︎</span>Tracks</button>
+          <button class="nav-btn" data-view="playlists"><span class="nav-ico">☰︎</span>Playlists</button>
         </nav>
         <div class="player-bar">
           <div class="np-row" id="npRow">
-            <div class="np-art" id="npArt">♪</div>
+            <div class="np-art" id="npArt">♪︎</div>
             <div class="np-info">
               <div class="np-title" id="npTitle">Nothing playing</div>
               <div class="np-artist" id="npArtist">—</div>
             </div>
           </div>
           <div class="controls">
-            <button class="ctrl-btn" id="btnShuffle" title="Shuffle">⇄</button>
-            <button class="ctrl-btn" id="btnPrev">⏮</button>
-            <button class="ctrl-play" id="btnPlay">▶</button>
-            <button class="ctrl-btn" id="btnNext">⏭</button>
-            <button class="ctrl-btn" id="btnRepeat" title="Repeat">↺</button>
+            <button class="ctrl-btn" id="btnShuffle" title="Shuffle">⇄︎</button>
+            <button class="ctrl-btn" id="btnPrev">⏮︎</button>
+            <button class="ctrl-play" id="btnPlay">▶︎</button>
+            <button class="ctrl-btn" id="btnNext">⏭︎</button>
+            <button class="ctrl-btn" id="btnRepeat" title="Repeat">↺︎</button>
           </div>
           <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
           <div class="ps-label">Playing on</div>
@@ -477,9 +525,9 @@ class MABrowserCard extends HTMLElement {
       <div class="main">
         <div class="topbar">
           <div class="search-wrap">
-            <span style="font-size:12px;color:var(--t3)">🔍</span>
+            <span style="font-size:14px;color:var(--t3)">⌕︎</span>
             <input class="search-inp" id="searchInp" type="text" placeholder="Search everything…" />
-            <button class="search-clear" id="searchClear">✕</button>
+            <button class="search-clear" id="searchClear">✕︎</button>
           </div>
         </div>
         <div class="scroll" id="scroll">
@@ -1019,8 +1067,8 @@ class MABrowserCard extends HTMLElement {
     if (!items.length) return '';
     // Encode items as JSON in data attribute
     const encoded = this._esc(JSON.stringify(items.map(i => ({ uri: i.uri, media_type: i.media_type || 'album' }))));
-    return `<button class="sec-btn" data-action="play-all" data-items="${encoded}">▶ Play all</button>
-            <button class="sec-btn" data-action="shuffle-all" data-items="${encoded}">⇄ Shuffle all</button>`;
+    return `<button class="sec-btn" data-action="play-all" data-items="${encoded}">▶︎ Play all</button>
+            <button class="sec-btn" data-action="shuffle-all" data-items="${encoded}">⇄︎ Shuffle all</button>`;
   }
 
   _section(title, inner, wrapClass, count, actions) {
@@ -1039,8 +1087,8 @@ class MABrowserCard extends HTMLElement {
     return `<div class="album-card" data-uri="${this._esc(uri)}" data-type="${mediaType}" data-name="${this._esc(name)}" data-artist="${this._esc(artist)}">
       <div class="a-art-wrap" ${artAttrs}>
         <span class="a-placeholder">💿</span>
-        <div class="a-overlay"><div class="play-circle">▶</div></div>
-        <div class="playing-badge">▶ playing</div>
+        <div class="a-overlay"><div class="play-circle">▶︎</div></div>
+        <div class="playing-badge">▶︎ playing</div>
       </div>
       <div class="a-name" title="${this._esc(name)}">${this._esc(name)}</div>
       <div class="a-artist">${this._esc(artist)}</div>
@@ -1059,7 +1107,7 @@ class MABrowserCard extends HTMLElement {
     return `<div class="album-card" data-uri="${this._esc(uri)}" data-type="${mediaType}" data-name="${this._esc(name)}" data-artist="">
       <div class="a-art-wrap" ${artAttrs}>
         <span class="a-placeholder">💿</span>
-        <div class="a-overlay"><div class="play-circle">▶</div></div>
+        <div class="a-overlay"><div class="play-circle">▶︎</div></div>
       </div>
       <div class="a-name" title="${this._esc(name)}">${this._esc(name)}</div>
     </div>`;
@@ -1077,14 +1125,14 @@ class MABrowserCard extends HTMLElement {
 
   _trackRowHtml(item, num, inAlbum) {
     const artUrl = this._artUrl(item);
-    const artAttrs = artUrl ? `data-img="${this._esc(artUrl)}" data-placeholder="♫"` : '';
+    const artAttrs = artUrl ? `data-img="${this._esc(artUrl)}" data-placeholder="♫︎"` : '';
     const artist = this._artistName(item);
     const meta = inAlbum ? artist : [artist, item.album?.name].filter(Boolean).join(' · ');
     const uri = item.uri || '';
     const name = item.name || '';
     return `<div class="track-row" data-uri="${this._esc(uri)}" data-type="track" data-name="${this._esc(name)}">
       <div class="tr-num">${num}</div>
-      <div class="tr-art" ${artAttrs}>♫</div>
+      <div class="tr-art" ${artAttrs}>♫︎</div>
       <div class="tr-info">
         <div class="tr-name">${this._esc(name)}</div>
         ${meta ? `<div class="tr-meta">${this._esc(meta)}</div>` : ''}
@@ -1095,14 +1143,14 @@ class MABrowserCard extends HTMLElement {
 
   _radioCardHtml(item) {
     const artUrl = this._artUrl(item);
-    const artAttrs = artUrl ? `data-img="${this._esc(artUrl)}" data-placeholder="📻"` : '';
+    const artAttrs = artUrl ? `data-img="${this._esc(artUrl)}" data-placeholder="⊙︎"` : '';
     const uri = item.uri || '';
     const name = item.name || '';
     const desc = item.metadata?.description || '';
     return `<div class="album-card" data-uri="${this._esc(uri)}" data-type="radio" data-name="${this._esc(name)}" data-artist="">
       <div class="a-art-wrap" ${artAttrs}>
-        <span class="a-placeholder">📻</span>
-        <div class="a-overlay"><div class="play-circle">▶</div></div>
+        <span class="a-placeholder">⊙︎</span>
+        <div class="a-overlay"><div class="play-circle">▶︎</div></div>
       </div>
       <div class="a-name" title="${this._esc(name)}">${this._esc(name)}</div>
       ${desc ? `<div class="a-artist">${this._esc(desc)}</div>` : ''}
@@ -1171,9 +1219,9 @@ class MABrowserCard extends HTMLElement {
     const menu = document.createElement('div');
     menu.className = 'ctx-menu';
     menu.innerHTML = `
-      <div class="ctx-item" data-enqueue="play"><span class="ctx-ico">▶</span>Play now</div>
-      <div class="ctx-item" data-enqueue="shuffle"><span class="ctx-ico">⇄</span>Shuffle play</div>
-      <div class="ctx-item" data-enqueue="next"><span class="ctx-ico">⏭</span>Play next</div>
+      <div class="ctx-item" data-enqueue="play"><span class="ctx-ico">▶︎</span>Play now</div>
+      <div class="ctx-item" data-enqueue="shuffle"><span class="ctx-ico">⇄︎</span>Shuffle play</div>
+      <div class="ctx-item" data-enqueue="next"><span class="ctx-ico">⏭︎</span>Play next</div>
       <div class="ctx-item" data-enqueue="add"><span class="ctx-ico">+</span>Add to queue</div>`;
     menu.querySelectorAll('.ctx-item').forEach(item => {
       item.addEventListener('click', e => {
@@ -1231,7 +1279,7 @@ class MABrowserCard extends HTMLElement {
     // Get current state from HA for the header
     const state = this._hass.states[this._selectedPlayer];
     const artPath = state?.attributes.entity_picture_local || state?.attributes.entity_picture || null;
-    const artHtml = artPath ? `<img src="${artPath}" style="width:100%;height:100%;object-fit:cover;border-radius:7px;" />` : '♪';
+    const artHtml = artPath ? `<img src="${artPath}" style="width:100%;height:100%;object-fit:cover;border-radius:7px;" />` : '♪︎';
     const title  = state?.attributes.media_title  || 'Queue';
     const artist = state?.attributes.media_artist || '';
 
@@ -1242,7 +1290,7 @@ class MABrowserCard extends HTMLElement {
           <div class="queue-title" id="qTitle">${this._esc(title)}</div>
           <div class="queue-subtitle" id="qSub">${this._esc(artist)}</div>
         </div>
-        <button class="queue-close" id="qClose">✕</button>
+        <button class="queue-close" id="qClose">✕︎</button>
       </div>
       <div class="queue-scroll" id="qScroll">
         <div class="state-box"><div class="spinner"></div></div>
@@ -1282,14 +1330,14 @@ class MABrowserCard extends HTMLElement {
       qScroll.innerHTML = queueItems.map((item, i) => {
         const img = item.image;
         const artUrl = img ? `${this._maUrl}/imageproxy?path=${encodeURIComponent(img.path)}&provider=${encodeURIComponent(img.provider)}&size=100` : null;
-        const artAttrs = artUrl ? `data-img="${this._esc(artUrl)}" data-placeholder="♫"` : '';
+        const artAttrs = artUrl ? `data-img="${this._esc(artUrl)}" data-placeholder="♫︎"` : '';
         const trackName = item.media_item?.name || item.name || '';
         const artistName = item.media_item?.artists?.[0]?.name || '';
         const isActive = item.sort_index === currentIndex;
         const isPast = item.sort_index < currentIndex;
         return `<div class="queue-item${isActive ? ' active' : ''}${isPast ? ' past' : ''}">
-          <div class="qi-num">${isActive ? '▶' : item.sort_index || i + 1}</div>
-          <div class="qi-art" ${artAttrs}>♫</div>
+          <div class="qi-num">${isActive ? '▶︎' : item.sort_index || i + 1}</div>
+          <div class="qi-art" ${artAttrs}>♫︎</div>
           <div class="qi-info">
             <div class="qi-name">${this._esc(trackName)}</div>
             ${artistName ? `<div class="qi-artist">${this._esc(artistName)}</div>` : ''}
@@ -1301,7 +1349,7 @@ class MABrowserCard extends HTMLElement {
             // Hydrate images
       qScroll.querySelectorAll('[data-img]').forEach(el => {
         const url = el.dataset.img;
-        const ph = el.dataset.placeholder || '♫';
+        const ph = el.dataset.placeholder || '♫︎';
         delete el.dataset.img;
         this._loadImgInto(url, el, ph);
       });
@@ -1392,7 +1440,7 @@ class MABrowserCard extends HTMLElement {
     this._lastNpKey = npKey;
 
     const isPlaying = state.state === 'playing';
-    this._$('btnPlay').innerHTML = isPlaying ? '⏸' : '▶';
+    this._$('btnPlay').innerHTML = isPlaying ? '⏸︎' : '▶︎';
 
     // Shuffle & repeat button states
     const shuffleBtn = this._$('btnShuffle');
@@ -1400,7 +1448,7 @@ class MABrowserCard extends HTMLElement {
     shuffleBtn.classList.toggle('active', !!state.attributes.shuffle);
     const repeat = state.attributes.repeat || 'off';
     repeatBtn.classList.toggle('active', repeat !== 'off');
-    repeatBtn.textContent = repeat === 'one' ? '↺¹' : '↺';
+    repeatBtn.textContent = repeat === 'one' ? '↺︎¹' : '↺︎';
     repeatBtn.title = `Repeat: ${repeat}`;
 
     this._$('npTitle').textContent  = state.attributes.media_title  || 'Nothing playing';
@@ -1413,7 +1461,7 @@ class MABrowserCard extends HTMLElement {
         artEl.innerHTML = `<img src="${artPath}" style="width:100%;height:100%;object-fit:cover;border-radius:6px;" onerror="this.style.display='none'" />`;
       }
     } else {
-      artEl.textContent = '♪';
+      artEl.textContent = '♪︎';
     }
 
     // Fetch accurate progress from MA queue via WebSocket
@@ -1465,6 +1513,7 @@ class MABrowserCard extends HTMLElement {
     return {
       config_entry_id: 'YOUR_MA_CONFIG_ENTRY_ID',
       ma_url: 'http://YOUR_MA_IP:8095',
+      theme: 'dark',
     };
   }
 }
@@ -1474,7 +1523,7 @@ window.customCards = window.customCards || [];
 window.customCards.push({
   type: 'ma-browser-card',
   name: 'MA Browser Card',
-  description: 'A Plex-inspired Music Assistant browser — browse albums, artists, tracks, radio and playlists with artwork, search, queue view and playback controls.',
+  description: 'A Music Assistant browser — browse albums, artists, tracks, radio and playlists with artwork, search, queue view and playback controls.',
   preview: true,
-  documentationURL: 'https://github.com/YOUR_GITHUB_USERNAME/ma-browser-card',
+  documentationURL: 'https://github.com/PMizz13/ma-browser-card',
 });
