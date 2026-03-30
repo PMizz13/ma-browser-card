@@ -32,7 +32,7 @@ A Music Assistant browser card for Home Assistant. Browse your music library - a
 1. Open HACS in Home Assistant
 2. Go to **Frontend**
 3. Click **⋮** → **Custom Repositories**
-4. Add `https://github.com/YOUR_GITHUB_USERNAME/ma-browser-card` as a **Lovelace** repository
+4. Add `https://github.com/PMizz13/ma-browser-card` as a **Lovelace** repository
 5. Find **MA Browser Card** in the list and click **Download**
 6. Restart Home Assistant
 
