@@ -1,36 +1,60 @@
 /**
- * MA Browser Card  v2.1.0
- * A Music Assistant browser card for Home Assistant
+ * MA Browser Card  v3.0.0
+ * A full-featured Music Assistant browser card for Home Assistant
+ * GitHub: https://github.com/PMizz13/ma-browser-card
  *
  * Installation:
  *   1. Copy ma-browser-card.js to /config/www/ma-browser-card.js
- *   2. In HA go to Settings → Dashboards → Resources → Add
- *      URL: /local/ma-browser-card.js  Type: JavaScript Module
- *   3. Add the card to your dashboard (see README for full config)
+ *   2. HA → Settings → Dashboards → Resources → Add Resource
+ *      URL: /local/ma-browser-card.js  |  Type: JavaScript Module
+ *   3. Add the card to your dashboard using the config below
  *
- * Minimal config:
- *   type: custom:ma-browser-card
- *   config_entry_id: YOUR_MA_CONFIG_ENTRY_ID
- *   ma_url: http://YOUR_MA_IP:8095
+ * ── FULL CONFIG REFERENCE ──────────────────────────────────────────────
  *
-  * Full config options:
  *   type: custom:ma-browser-card
- *   config_entry_id: 01JXXX...         # HA → Settings → Devices & Services → Music Assistant → Configure (check the URL)
- *   ma_url: http://192.168.1.x:8095    # Your Music Assistant server URL
- *   ma_token: eyJ...                   # MA Settings → Profile → Access Tokens (optional but enables Recently Played)
- *   height: 580                         # Card height in px (default: 580)
- *   theme: dark                         # Theme: dark (default), light, or auto (follows HA theme)
- *   players:                            # Optional: limit to specific MA player entities
- *     - media_player.my_speaker
- *     - media_player.kitchen
+ *
+ *   # Required
+ *   config_entry_id: 01JXXX...      # HA → Settings → Devices & Services →
+ *                                   #   Music Assistant → Configure (copy ID from URL)
+ *   ma_url: http://192.168.1.x:8095 # Your Music Assistant server URL
+ *
+ *   # Recommended
+ *   ma_token: eyJ...                # MA Settings → Profile → Access Tokens
+ *                                   # Enables the Recently Played section on home screen
+ *
+ *   # Layout
+ *   height: 580                     # Card height in pixels (default: 580)
+ *   sidebar_position: left          # left (default) or top (horizontal nav bar)
+ *   sidebar_width: 195              # Sidebar width in px, left sidebar only (default: 195)
+ *   player_position: bottom         # bottom (default) or top
+ *                                   # top sidebar + bottom player = player pinned to card bottom
+ *   show_title: true                # Show/hide the logo title bar (default: true)
+ *
+ *   # Appearance
+ *   theme: auto                     # auto (default, follows HA theme), dark, or light
+ *   title: Music                    # Logo title text (default: Music)
+ *   subtitle: Music Assistant       # Logo subtitle text (default: Music Assistant)
+ *   icon: mdi:music                 # Any MDI icon for the logo (default: mdi:music)
+ *
+ *   # Behaviour
+ *   click_action: play              # play (default) or enqueue
+ *                                   # Controls single-click on album/track
+ *                                   # Right-click always shows full Play/Shuffle/Next/Enqueue menu
+ *
+ *   # Players
+ *   players:                        # Optional: limit dropdown to specific MA player entities
+ *     - media_player.kitchen        # If omitted, all MA players are auto-detected
+ *     - media_player.living_room
+ *
+ * ───────────────────────────────────────────────────────────────────────
  */
+
 
 const CSS = `
   :host { display: block; }
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   .card {
-    /* ── Dark theme (default) ── */
     --gold: #e5a00d;
     --gold-bg: rgba(229,160,13,0.13);
     --gold-border: rgba(229,160,13,0.25);
@@ -54,30 +78,15 @@ const CSS = `
     height: var(--card-height, 580px);
     position: relative;
   }
-
-  /* ── Light theme ── */
   .card.theme-light {
     --gold: var(--primary-color, #e5a00d);
     --gold-bg: color-mix(in srgb, var(--primary-color, #e5a00d) 12%, transparent);
     --gold-border: color-mix(in srgb, var(--primary-color, #e5a00d) 30%, transparent);
-    --bg0: #f5f5f7;
-    --bg2: #ffffff;
-    --bg3: #e8e8ee;
-    --t1: #111113;
-    --t2: #55555f;
-    --t3: #9898aa;
+    --bg0: #f5f5f7; --bg2: #ffffff; --bg3: #e8e8ee;
+    --bg-sidebar: #ebebef; --bg-player: #e0e0e6;
+    --t1: #111113; --t2: #55555f; --t3: #9898aa;
     --border: rgba(0,0,0,0.08);
   }
-  .card.theme-light {
-    --bg-sidebar: #ebebef;
-    --bg-player: #e0e0e6;
-  }
-  .card.theme-light .logo { border-bottom-color: rgba(0,0,0,0.08); }
-  .card.theme-light .nav-btn.active { background: var(--gold-bg); }
-  .card.theme-light .ctx-menu { background: #ffffff; }
-  .card.theme-light .queue-panel { background: #f0f0f4; }
-
-  /* ── Auto theme (follows HA theme) ── */
   .card.theme-auto {
     --gold: var(--primary-color, #e5a00d);
     --gold-bg: color-mix(in srgb, var(--primary-color, #e5a00d) 12%, transparent);
@@ -85,17 +94,59 @@ const CSS = `
     --bg0: var(--primary-background-color, #111113);
     --bg2: var(--card-background-color, #222228);
     --bg3: var(--secondary-background-color, #2e2e38);
+    --bg-sidebar: var(--sidebar-background-color, var(--primary-background-color, #0d0d10));
+    --bg-player: var(--sidebar-background-color, var(--primary-background-color, #09090e));
     --t1: var(--primary-text-color, #f0f0f5);
     --t2: var(--secondary-text-color, #9898aa);
     --t3: var(--disabled-text-color, #55555f);
     --border: var(--divider-color, rgba(255,255,255,0.07));
   }
-  .card.theme-auto {
-    --bg-sidebar: var(--sidebar-background-color, var(--primary-background-color, #0d0d10));
-    --bg-player: var(--sidebar-background-color, var(--primary-background-color, #09090e));
+  /* ── TOP SIDEBAR ── */
+  .card.sidebar-top { flex-direction: column; }
+  .card.sidebar-top .sidebar {
+    width: 100%; flex-direction: column;
+    border-right: none; border-bottom: 1px solid var(--border);
+    flex-shrink: 0; height: auto;
   }
-  .card.theme-auto .ctx-menu { background: var(--card-background-color, #1a1a22); }
-
+  .card.sidebar-top > .logo { border-bottom: 1px solid var(--border); padding: 10px 13px; order: 0; flex-shrink: 0; }
+  .card.sidebar-top .sidebar { order: 1; }
+  .card.sidebar-top .main { order: 2; }
+  .card.sidebar-top .nav {
+    display: flex; flex-direction: row; flex-wrap: wrap;
+    padding: 6px 8px; gap: 2px; overflow: visible;
+  }
+  .card.sidebar-top .nav-label { display: none; }
+  .card.sidebar-top .nav-btn { white-space: nowrap; margin-bottom: 0; width: auto; }
+  .card.sidebar-top .player-bar {
+    border-top: 1px solid var(--border);
+    display: flex; flex-direction: row; align-items: center;
+    gap: 10px; padding: 6px 12px; flex-shrink: 0; flex-wrap: wrap;
+  }
+  .card.sidebar-top .np-row { margin-bottom: 0; flex-shrink: 0; min-width: 140px; max-width: 200px; }
+  .card.sidebar-top .controls { margin-bottom: 0; gap: 8px; }
+  .card.sidebar-top .progress-bar { display: none; }
+  .card.sidebar-top .ps-label { display: none; }
+  .card.sidebar-top .player-sel { width: 130px; }
+  .card.sidebar-top .vol-row { margin-top: 0; min-width: 100px; }
+  /* sidebar-top + player-bottom: use flex order to push player to card bottom */
+  .card.sidebar-top.player-bottom { flex-direction: column; }
+  .card.sidebar-top.player-bottom .sidebar { order: 0; }
+  .card.sidebar-top.player-bottom .main { order: 1; flex: 1; min-height: 0; }
+  .card.sidebar-top.player-bottom .player-footer { order: 3; flex-shrink: 0; border-top: 1px solid var(--border); background: var(--bg-player); }
+  .card.sidebar-top.player-bottom .sidebar .player-bar { display: none; }
+  .card.sidebar-top .player-footer {
+    display: flex; flex-direction: row; align-items: center;
+    gap: 10px; padding: 6px 12px; flex-wrap: wrap;
+  }
+  .card.sidebar-top .player-footer .np-row { margin-bottom: 0; flex-shrink: 0; min-width: 140px; max-width: 200px; }
+  .card.sidebar-top .player-footer .controls { margin-bottom: 0; gap: 8px; }
+  .card.sidebar-top .player-footer .progress-bar { display: none; }
+  .card.sidebar-top .player-footer .ps-label { display: none; }
+  .card.sidebar-top .player-footer .player-sel { width: 130px; }
+  .card.sidebar-top .player-footer .vol-row { margin-top: 0; min-width: 100px; }
+  /* sidebar-left player positioning */
+  .card.player-top .sidebar { flex-direction: column-reverse; }
+  .card.player-top.sidebar-left .player-bar { border-top: none; border-bottom: 1px solid var(--border); }
 
   /* ── SIDEBAR ── */
   .sidebar {
@@ -477,51 +528,88 @@ class MABrowserCard extends HTMLElement {
 
   // ── BUILD ─────────────────────────────────────────────────────
   _build() {
-    const height = this._config.height || 580;
+    const height       = this._config.height || 580;
+    const theme        = this._config.theme || 'auto';
+    const themeClass   = theme === 'light' ? 'theme-light' : theme === 'auto' ? 'theme-auto' : '';
+    const sidebarWidth = this._config.sidebar_width ? `${this._config.sidebar_width}px` : '195px';
+    const sidebarTop   = this._config.sidebar_position === 'top';
+    const playerTop    = this._config.player_position  === 'top';
+    const showTitle    = this._config.show_title !== false;
+    const cardTitle    = this._config.title    || 'Music';
+    const cardSubtitle = this._config.subtitle || 'Music Assistant';
+    const cardIcon     = this._config.icon     || 'mdi:music';
     if (this._config.columns) this.style.gridColumn = `span ${this._config.columns}`;
-    const theme = this._config.theme || 'dark';
-    const themeClass = theme === 'light' ? 'theme-light' : theme === 'auto' ? 'theme-auto' : '';
+
+    const classes = [
+      themeClass,
+      sidebarTop ? 'sidebar-top' : '',
+      playerTop  ? 'player-top'  : 'player-bottom',
+    ].filter(Boolean).join(' ');
+
+    // ── Reusable HTML blocks ──────────────────────────────────────
+    const playerBarHtml = `<div class="player-bar">
+        <div class="np-row" id="npRow">
+          <div class="np-art" id="npArt">♪︎</div>
+          <div class="np-info">
+            <div class="np-title" id="npTitle">Nothing playing</div>
+            <div class="np-artist" id="npArtist">—</div>
+          </div>
+        </div>
+        <div class="controls">
+          <button class="ctrl-btn" id="btnShuffle" title="Shuffle">⇄︎</button>
+          <button class="ctrl-btn" id="btnPrev">⏮︎</button>
+          <button class="ctrl-play" id="btnPlay">▶︎</button>
+          <button class="ctrl-btn" id="btnNext">⏭︎</button>
+          <button class="ctrl-btn" id="btnRepeat" title="Repeat">↺︎</button>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+        <div class="ps-label">Playing on</div>
+        <select class="player-sel" id="playerSel"><option value="">Loading…</option></select>
+        <div class="vol-row">
+          <span class="vol-icon" id="volIcon">🔈</span>
+          <input class="vol-slider" id="volSlider" type="range" min="0" max="100" value="50" style="--vol-pct:50%" />
+        </div>
+      </div>`;
+
+    const logoHtml = showTitle ? `<div class="logo">
+        <div class="logo-icon">
+          <ha-icon icon="${cardIcon}" style="--mdc-icon-size:18px;color:#111;"></ha-icon>
+        </div>
+        <div><div class="logo-name">${cardTitle}</div><div class="logo-sub">${cardSubtitle}</div></div>
+      </div>` : '';
+
+    const navHtml = `<nav class="nav">
+        <div class="nav-label">Library</div>
+        <button class="nav-btn active" data-view="home"><span class="nav-ico">⌂︎</span>Home</button>
+        <button class="nav-btn" data-view="radio"><span class="nav-ico">∿︎</span>Radio</button>
+        <button class="nav-btn" data-view="albums"><span class="nav-ico">◉︎</span>Albums</button>
+        <button class="nav-btn" data-view="artists"><span class="nav-ico">♪︎</span>Artists</button>
+        <button class="nav-btn" data-view="tracks"><span class="nav-ico">♫︎</span>Tracks</button>
+        <button class="nav-btn" data-view="playlists"><span class="nav-ico">☰︎</span>Playlists</button>
+      </nav>`;
+
+    // Sidebar inner: always logo first, then player/nav depending on position
+    // player_position:top  → logo, player, nav
+    // player_position:bottom + sidebar left → logo, nav, player
+    // player_position:bottom + sidebar top  → logo, nav only (player rendered below main)
+    const sidebarInner = playerTop
+      ? logoHtml + playerBarHtml + navHtml
+      : logoHtml + navHtml + (sidebarTop ? '' : playerBarHtml);
+
+    // Bottom player bar outside sidebar (only for sidebar-top + player-bottom)
+    const bottomPlayer = (sidebarTop && !playerTop) ? playerBarHtml.replace('class="player-bar"', 'class="player-bar player-footer"') : '';
+
+    // For sidebar-top: render logo outside sidebar so it's always first
+    const outerLogo  = sidebarTop ? logoHtml : '';
+    const innerLogo  = sidebarTop ? '' : logoHtml;
+    const innerContent = playerTop
+      ? innerLogo + playerBarHtml + navHtml
+      : innerLogo + navHtml + (sidebarTop ? '' : playerBarHtml);
 
     this.shadowRoot.innerHTML = `<style>${CSS}</style>
-    <div class="card ${themeClass}" style="--card-height:${height}px">
-      <div class="sidebar">
-        <div class="logo">
-          <div class="logo-icon">▶︎</div>
-          <div><div class="logo-name">Music</div><div class="logo-sub">Music Assistant</div></div>
-        </div>
-        <nav class="nav">
-          <div class="nav-label">Library</div>
-          <button class="nav-btn active" data-view="home"><span class="nav-ico">⌂︎</span>Home</button>
-          <button class="nav-btn" data-view="radio"><span class="nav-ico">∿︎</span>Radio</button>
-          <button class="nav-btn" data-view="albums"><span class="nav-ico">◉︎</span>Albums</button>
-          <button class="nav-btn" data-view="artists"><span class="nav-ico">♪︎</span>Artists</button>
-          <button class="nav-btn" data-view="tracks"><span class="nav-ico">♫︎</span>Tracks</button>
-          <button class="nav-btn" data-view="playlists"><span class="nav-ico">☰︎</span>Playlists</button>
-        </nav>
-        <div class="player-bar">
-          <div class="np-row" id="npRow">
-            <div class="np-art" id="npArt">♪︎</div>
-            <div class="np-info">
-              <div class="np-title" id="npTitle">Nothing playing</div>
-              <div class="np-artist" id="npArtist">—</div>
-            </div>
-          </div>
-          <div class="controls">
-            <button class="ctrl-btn" id="btnShuffle" title="Shuffle">⇄︎</button>
-            <button class="ctrl-btn" id="btnPrev">⏮︎</button>
-            <button class="ctrl-play" id="btnPlay">▶︎</button>
-            <button class="ctrl-btn" id="btnNext">⏭︎</button>
-            <button class="ctrl-btn" id="btnRepeat" title="Repeat">↺︎</button>
-          </div>
-          <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
-          <div class="ps-label">Playing on</div>
-          <select class="player-sel" id="playerSel"><option value="">Loading…</option></select>
-          <div class="vol-row">
-            <span class="vol-icon" id="volIcon">🔈</span>
-            <input class="vol-slider" id="volSlider" type="range" min="0" max="100" value="50" style="--vol-pct:50%" />
-          </div>
-        </div>
-      </div>
+    <div class="card ${classes}" style="--card-height:${height}px;--sidebar:${sidebarWidth}">
+      ${outerLogo}
+      <div class="sidebar">${innerContent}</div>
       <div class="main">
         <div class="topbar">
           <div class="search-wrap">
@@ -534,6 +622,7 @@ class MABrowserCard extends HTMLElement {
           <div class="state-box"><div class="spinner"></div><span>Connecting…</span></div>
         </div>
       </div>
+      ${bottomPlayer}
     </div>`;
 
     // Nav
@@ -541,7 +630,7 @@ class MABrowserCard extends HTMLElement {
       btn.addEventListener('click', () => this._nav(btn.dataset.view, btn))
     );
 
-    // Search - global, works on any view
+    // Search
     const searchEl = this.shadowRoot.getElementById('searchInp');
     const clearBtn = this.shadowRoot.getElementById('searchClear');
     const searchHandler = () => {
@@ -589,7 +678,7 @@ class MABrowserCard extends HTMLElement {
     });
     this.shadowRoot.getElementById('volIcon').addEventListener('click', () => this._toggleMute());
 
-    // Click scroll area - delegated
+    // Click handlers
     this._attachClickHandler();
 
     // Dismiss context menu on outside click
@@ -598,7 +687,6 @@ class MABrowserCard extends HTMLElement {
       if (this._ctxMenu && !this._ctxMenu.contains(e.target)) this._dismissCtx();
     });
   }
-
   async _init() {
     try {
       this._loadPlayers();
@@ -822,8 +910,35 @@ class MABrowserCard extends HTMLElement {
     });
   }
 
+  async _fetchRecentlyAdded(limit = 20) {
+    // Requires ma_token — uses MA WebSocket directly
+    // (HA service get_library ignores order_by and always returns alphabetical)
+    if (!this._maToken) return [];
+    if (!this._wsReady && this._ws) {
+      await new Promise(resolve => {
+        const check = setInterval(() => {
+          if (this._wsReady) { clearInterval(check); resolve(); }
+        }, 200);
+        setTimeout(() => { clearInterval(check); resolve(); }, 5000);
+      });
+    }
+    if (!this._wsReady) return [];  // Fall back to empty if WS not available
+    try {
+      const result = await this._wsSend('music/albums/library_items', {
+        order_by: 'timestamp_added_desc',
+        limit,
+      });
+      const items = result?.items ?? (Array.isArray(result) ? result : []);
+      return items;
+    } catch(e) {
+      console.warn('[MA Card] recently_added failed:', e.message);
+      return [];
+    }
+  }
+
   async _fetchRecentlyPlayed(limit = 20) {
-    // If WS not ready yet, wait up to 5s for auth to complete
+    // Requires ma_token — uses MA WebSocket directly
+    if (!this._maToken) return [];
     if (!this._wsReady && this._ws) {
       await new Promise(resolve => {
         const check = setInterval(() => {
@@ -907,11 +1022,11 @@ class MABrowserCard extends HTMLElement {
       const playlists = res.playlists ?? [];
 
       let html = `<div class="section"><div class="sec-hdr"><span class="sec-title">Search: ${this._esc(q)}</span></div></div>`;
-      if (radio.length)     html += this._section('Radio', radio.map(a => this._radioCardHtml(a)).join(''), 'radio-grid');
       if (albums.length)    html += this._section('Albums', albums.map(a => this._albumCardHtml(a)).join(''), 'album-grid', albums.length, this._sectionActions(albums));
       if (artists.length)   html += this._section('Artists', artists.map(a => this._artistCardHtml(a)).join(''), 'artist-grid');
       if (tracks.length)    html += this._section('Tracks', tracks.map((t,i) => this._trackRowHtml(t, i+1)).join(''), 'track-list', tracks.length, this._sectionActions(tracks));
       if (playlists.length) html += this._section('Playlists', playlists.map(a => this._albumCardHtml(a,'playlist')).join(''), 'album-grid', playlists.length, this._sectionActions(playlists));
+      if (radio.length)     html += this._section('Radio', radio.map(a => this._radioCardHtml(a)).join(''), 'radio-grid');
       if (!albums.length && !artists.length && !tracks.length && !radio.length && !playlists.length) {
         html = `<div class="state-box">No results for "${this._esc(q)}"</div>`;
       }
@@ -929,15 +1044,17 @@ class MABrowserCard extends HTMLElement {
       const results = await Promise.allSettled([
         this._getLibrary('radio', 'sort_name', 50, true),
         this._fetchRecentlyPlayed(20),
-        this._fetchLibrary('album', 'last_modified', 20),
+        this._fetchRecentlyAdded(20),
         this._fetchLibrary('album', 'random', 20),
       ]);
       const [radio, recentlyPlayed, recentAlbums, random] = results.map(r => r.value ?? []);
       let html = '';
       if (radio.length)          html += this._section('Radio Stations', radio.map(a => this._radioCardHtml(a)).join(''), 'radio-grid');
-      if (recentlyPlayed.length) html += this._section('Recently Played', recentlyPlayed.map(a => this._maItemCardHtml(a)).join(''), 'album-grid');
-      if (recentAlbums.length)   html += this._section('Recently Added', recentAlbums.map(a => this._albumCardHtml(a)).join(''), 'album-grid');
+      if (recentlyPlayed.length) html += this._section('Recently Played', recentlyPlayed.reverse().map(a => this._maItemCardHtml(a)).join(''), 'album-grid');
+      if (recentAlbums.length)   html += this._section('Recently Added', recentAlbums.map(a => this._maItemCardHtml(a)).join(''), 'album-grid');
       if (random.length)         html += this._section('Discover', random.map(a => this._albumCardHtml(a)).join(''), 'album-grid');
+      // Note: Recently Played and Recently Added sections are only shown when ma_token is set
+      // (they use the MA WebSocket which requires authentication)
       this._scroll().innerHTML = html || '<div class="state-box">No content found</div>';
       this._hydrateImages();
       this._attachClickHandler();
@@ -1096,10 +1213,21 @@ class MABrowserCard extends HTMLElement {
     </div>`;
   }
 
-  // Card for items from MA WebSocket API — image is {type, path, provider}
+  // Card for items from MA WebSocket API
+  // Handles multiple image formats returned by different WS commands
   _maItemCardHtml(item) {
-    const imgPath = item.image?.path;
-    const artUrl = imgPath ? `${this._maUrl}/imageproxy?path=${encodeURIComponent(imgPath)}&provider=${encodeURIComponent(item.image?.provider || '')}&size=200` : null;
+    let artUrl = null;
+    if (typeof item.image === 'string' && item.image) {
+      // Plain URL string (e.g. from recently_played_items)
+      artUrl = item.image;
+    } else if (item.image?.path) {
+      // Object with path (e.g. from queue items)
+      artUrl = `${this._maUrl}/imageproxy?path=${encodeURIComponent(item.image.path)}&provider=${encodeURIComponent(item.image.provider || '')}&size=200`;
+    } else if (item.metadata?.images?.[0]?.path) {
+      // Full item with metadata.images array (e.g. from albums/library_items)
+      const img = item.metadata.images[0];
+      artUrl = `${this._maUrl}/imageproxy?path=${encodeURIComponent(img.path)}&provider=${encodeURIComponent(img.provider || '')}&size=200`;
+    }
     const artAttrs = artUrl ? `data-img="${this._esc(artUrl)}" data-placeholder="💿"` : '';
     const uri = item.uri || '';
     const name = item.name || '';
@@ -1143,13 +1271,13 @@ class MABrowserCard extends HTMLElement {
 
   _radioCardHtml(item) {
     const artUrl = this._artUrl(item);
-    const artAttrs = artUrl ? `data-img="${this._esc(artUrl)}" data-placeholder="⊙︎"` : '';
+    const artAttrs = artUrl ? `data-img="${this._esc(artUrl)}" data-placeholder="📻"` : '';
     const uri = item.uri || '';
     const name = item.name || '';
     const desc = item.metadata?.description || '';
     return `<div class="album-card" data-uri="${this._esc(uri)}" data-type="radio" data-name="${this._esc(name)}" data-artist="">
       <div class="a-art-wrap" ${artAttrs}>
-        <span class="a-placeholder">⊙︎</span>
+        <span class="a-placeholder">📻</span>
         <div class="a-overlay"><div class="play-circle">▶︎</div></div>
       </div>
       <div class="a-name" title="${this._esc(name)}">${this._esc(name)}</div>
@@ -1173,7 +1301,8 @@ class MABrowserCard extends HTMLElement {
     // album-card or track-row — play on click
     const albumEl = e.target.closest('.album-card');
     if (albumEl && albumEl.dataset.uri) {
-      this._playMedia(albumEl.dataset.uri, albumEl.dataset.type);
+      const action = this._config.click_action || 'play';
+      this._playMedia(albumEl.dataset.uri, albumEl.dataset.type, action === 'enqueue' ? 'add' : 'play');
       return;
     }
     const trackEl = e.target.closest('.track-row');
@@ -1513,7 +1642,6 @@ class MABrowserCard extends HTMLElement {
     return {
       config_entry_id: 'YOUR_MA_CONFIG_ENTRY_ID',
       ma_url: 'http://YOUR_MA_IP:8095',
-      theme: 'dark',
     };
   }
 }
@@ -1523,7 +1651,6 @@ window.customCards = window.customCards || [];
 window.customCards.push({
   type: 'ma-browser-card',
   name: 'MA Browser Card',
-  description: 'A Music Assistant browser — browse albums, artists, tracks, radio and playlists with artwork, search, queue view and playback controls.',
+  description: 'A full-featured Music Assistant browser card — browse albums, artists, tracks, radio and playlists with artwork, search, queue view and playback controls.',
   preview: true,
   documentationURL: 'https://github.com/PMizz13/ma-browser-card',
-});
