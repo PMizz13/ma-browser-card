@@ -12,14 +12,17 @@ A Music Assistant browser card for Home Assistant. Browse your music library - a
 - Browse up to 500 albums, artists, tracks, playlists and radio stations
 - Global search across your entire library from any view
 - Favourited radio stations from Music Assistant
-- Recently played, recently added and discover sections on the home screen
+- Recently played, recently added and discover sections on the home screen (MA token required)
 - Click any album or track to play immediately
 - Right-click for Play now / Shuffle play / Play next / Add to queue
-- Full queue view with artwork - click the now-playing artwork to open
+- Full queue view with artwork - click the now-playing artwork to open (MA token required)
 - Shuffle and repeat controls
 - Volume slider
-- Album art with lazy loading - no performance impact on large libraries
+- Album art with loaded as needed - no performance impact on large libraries
 - Library caching for instant navigation after first load
+- Adjustable sidebar size and layout
+- Fits to your theme
+- Party mode for queueing up tracks
 
 ## Requirements
 
@@ -78,32 +81,49 @@ ma_url: http://192.168.1.x:8095
 type: custom:ma-browser-card
 config_entry_id: 01JNBHFPQSJY03ANJ6XXF053W2
 ma_url: http://192.168.1.x:8095
-ma_token: eyJ...               # Optional — enables Recently Played section
+ma_token: eyJ...               # Optional — enables Recently Played and Recently Addes sections
 height: 580                    # Card height in pixels (default: 580)
 players:                       # Optional — limit to specific MA players
   - media_player.kitchen_speaker    # If omitted, auto-detects all MA players
   - media_player.living_room
-theme: auto
+theme: auto                     # auto (default, copies dashboard theme), dark, light
+sidebar_position: left          # left (default) or top (horizontal nav bar)
+sidebar_width: 195              # Sidebar width in px, left sidebar only (default: 195)
+player_position: bottom         # bottom (default) or top
+show_title: true                # Show/hide the logo title bar (default: true)
+title: Music                    # Logo title text (default: Music)
+subtitle: Music Assistant       # Logo subtitle text (default: Music Assistant)
+icon: mdi:music                 # Any MDI icon for the logo (default: mdi:music)
+click_action: play              # play (default) or enqueue
 ```
 
 ### Config options
 
 | Option            | Required | Default | Description                                                      |
 | ----------------- | -------- | ------- | ---------------------------------------------------------------- |
+|**Functionality**  |          |         |                                                                  |
 | `config_entry_id` | Yes      | -       | Your MA integration config entry ID                              |
 | `ma_url`          | Yes      | -       | URL of your MA server, e.g. `http://192.168.1.x:8095`            |
-| `ma_token`        | No       | -       | MA access token — enables Recently Played                        |
+| `ma_token`        | No       | -       | MA access token — enables Recently Played and Recently Added     |
+| `players`         | No       | all     | List of `media_player` entity IDs to show in the player selector |
+| `click_action`    | No       | play    | What to do when media is clicked (play, enqueue)                 |
+|**Layout**         |          |         |                                                                  |
 | `height`          | No       | `580`   | Card height in pixels                                            |
-| `players`         | No       | auto    | List of `media_player` entity IDs to show in the player selector |
-| `theme`           | No       | dark    | Theme for card, e.g. dark, light, auto (use Home Assistant theme)|
-
+| `sidebar_position`| No       | left    | Set position of sidebar (left, top)                              |
+| `sidebar_width`   | No       | 195     | Set the sidebar width when positioned to the left in pixels      |
+| `player_position` | No       | bottom  | Position the player to the bottom or top                         |
+| **Appearance**    |          |         |                                                                  |
+| `title`           | No       | Music   | Text for title card                                              |
+| `subtitle`        | No       | Music Assistant | Subtitle for card                                        |
+| `icon`            | No       | mdi:music | Icon for card (any mdi)                                        |
+| `theme`           | No       | auto    | Theme for card, (dark, light, auto (use Home Assistant theme))   |
 ## Usage
 
 ### Browsing
 Use the sidebar to navigate between Home, Saved Radio, Albums, Artists, Tracks and Playlists.
 
 ### Playing
-- **Click** any album, radio station or track to play it on the selected player
+- **Click** any album, radio station or track to play it on the selected player (or enqueue if set)
 - **Right-click** (or long-press on mobile) for more options: Play now, Shuffle play, Play next, Add to queue
 
 ### Search
@@ -118,8 +138,9 @@ Use the dropdown in the sidebar to switch between MA players. The volume slider 
 ## Notes
 
 - The `ma_token` is stored in plaintext in your Lovelace config. Treat it like a password — don't share your dashboard YAML publicly if it contains your token.
-- Library browsing loads up to 500 items per section. Search covers your full library regardless of this limit.
-- The card uses a WebSocket connection directly to your MA server for Recently Played data and the queue view. This requires `ma_url` and `ma_token` to be set.
+- Library browsing loads up to 500 items per section for performance. Search covers your full library regardless of this limit.
+- The card uses a WebSocket connection directly to your MA server for Recently Played, Recently added and the queue view. This requires `ma_url` and `ma_token` to be set.
+- There is a hidden scroll bar in the media view section for use with a mouse or trackpad without a scroll feature, just click on the right side of the pane where you would expect a scroll bar to usually be and it will show up
 
 ## Troubleshooting
 
@@ -131,6 +152,7 @@ Check that your MA server is reachable at the `ma_url` you configured. Artwork i
 
 **Recently Played section missing**
 Add `ma_token` to your config. Without it the section is skipped silently.
+If this is in the card yaml then reset the cache. This will need to be done when changing dashboard themes currently.
 
 **Recently Played section not changing**
 A known bug in Music Assistant where certain players do not track played tracks. You will need to wait on a fix from Music Assistant.
