@@ -38,7 +38,7 @@ A Music Assistant browser card for Home Assistant. Browse your music library - a
 
 ## Manual Installation
 
-1. Download `ma-browser-card.js` from the [latest release](https://github.com/YOUR_GITHUB_USERNAME/ma-browser-card/releases/latest)
+1. Download `ma-browser-card.js` from the [latest release](https://github.com/PMizz13/ma-browser-card/releases/latest)
 2. Copy it to `/config/www/ma-browser-card.js` on your HA instance
 3. In HA go to **Settings → Dashboards → ⋮ → Resources → Add Resource**
    - URL: `/local/ma-browser-card.js`
