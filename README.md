@@ -50,6 +50,8 @@ A Music Assistant browser card for Home Assistant. Browse your music library - a
 
 ## Configuration
 
+Making any configuration changes may require a frontend cache reset to repopulate the data correctly. I am working on a fix for this to make it easier.
+
 ### Finding your `config_entry_id`
 
 Go to **Settings → Devices & Services → Music Assistant → Configure**. Look at the URL in your browser, it will contain something like
