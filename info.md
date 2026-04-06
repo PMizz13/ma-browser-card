@@ -6,5 +6,5 @@ Browse albums, artists, tracks, playlists and radio stations with full artwork. 
 
 **Requires:** Music Assistant v2.8+ with the HA integration installed.
 
-See the [README](https://github.com/YOUR_GITHUB_USERNAME/ma-browser-card/blob/main/README.md) for full installation and configuration instructions.
+See the [README](https://github.com/PMizz13/ma-browser-card/blob/main/README.md) for full installation and configuration instructions.
 
