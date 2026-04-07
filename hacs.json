@@ -1,6 +1,5 @@
 {
   "name": "MA Browser Card",
-  "description": "A Music Assistant browser card for Home Assistant",
   "render_readme": true,
   "filename": "ma-browser-card.js",
   "content_in_root": true
