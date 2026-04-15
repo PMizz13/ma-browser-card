@@ -30,14 +30,11 @@ A Music Assistant browser card for Home Assistant. Browse your music library - a
 - [Music Assistant](https://music-assistant.io/) server (v2.8+)
 - Music Assistant Home Assistant integration installed
 
-## Installation via HACS
+## Installation via HACS - Reccomended
 
-1. Open HACS in Home Assistant
-2. Go to **Frontend**
-3. Click **⋮** → **Custom Repositories**
-4. Add `https://github.com/PMizz13/ma-browser-card` as a **Dashboard** repository
-5. Find **MA Browser Card** in the list and click **Download**
-6. Restart Home Assistant
+Search for MA Browser Card in the HACS store. Or click the button below.
+
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=PMizz13&repository=ma-browser-card&category=plugin)
 
 ## Manual Installation
 
