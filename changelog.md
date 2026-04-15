@@ -1,5 +1,14 @@
 # MA Browser Card
 
+## V 3.2.0
+#### **New Features**
+- New "retro" theme
+- Can now adjust the number of items shown in each section on the home screen
+
+### **Bug Fixes**
+- Fixed an issue where sections would sometimes disappear when updating the dashboard theme or card
+- Volume symbol now fits the themes better
+
 ## V 3.0.0
 #### **New Features**
 - Adjustable side bar size
