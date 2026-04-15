@@ -97,6 +97,11 @@ title: Music                    # Logo title text (default: Music)
 subtitle: Music Assistant       # Logo subtitle text (default: Music Assistant)
 icon: mdi:music                 # Any MDI icon for the logo (default: mdi:music)
 click_action: play              # play (default) or enqueue
+home_sections:                  # Set the number of items to display in each section
+  radio: 3                      # Set to 0 to hide section
+  recently_played: 2
+  recently_added: 3
+  discover: 4
 ```
 
 ### Config options
@@ -114,11 +119,16 @@ click_action: play              # play (default) or enqueue
 | `sidebar_position`| No       | left    | Set position of sidebar (left, top)                              |
 | `sidebar_width`   | No       | 195     | Set the sidebar width when positioned to the left in pixels      |
 | `player_position` | No       | bottom  | Position the player to the bottom or top                         |
+| 'home_sections'   | No       |         |                                                                  |
+| `radio`           | No       | 50      | Text for title card                                              |
+| `recently_played` | No       | 20      | Subtitle for card                                                |
+| `recently_added`  | No       | 20      | Text for title card                                              |
+| `discover`        | No       | 20      | Subtitle for card                                                |
 | **Appearance**    |          |         |                                                                  |
 | `title`           | No       | Music   | Text for title card                                              |
 | `subtitle`        | No       | Music Assistant | Subtitle for card                                        |
 | `icon`            | No       | mdi:music | Icon for card (any mdi)                                        |
-| `theme`           | No       | auto    | Theme for card, (dark, light, auto (use Home Assistant theme))   |
+| `theme`           | No       | auto    | Theme for card, (dark, light, retro, auto (use Home Assistant theme))   |
 ## Usage
 
 ### Browsing
@@ -154,7 +164,7 @@ Check that your MA server is reachable at the `ma_url` you configured. Artwork i
 
 **Recently Played section missing**
 Add `ma_token` to your config. Without it the section is skipped silently.
-If this is in the card yaml then reset the cache. This will need to be done when changing dashboard themes currently.
+If this is in the card yaml then reset the cache.
 
 **Recently Played section not changing**
 A known bug in Music Assistant where certain players do not track played tracks. You will need to wait on a fix from Music Assistant.
