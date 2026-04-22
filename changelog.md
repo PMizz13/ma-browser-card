@@ -1,5 +1,8 @@
 # MA Browser Card
 
+## V 3.2.0
+A redesign of the Retro theme
+
 ## V 3.1.0
 #### **New Features**
 - New "retro" theme
