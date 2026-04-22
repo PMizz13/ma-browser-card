@@ -1,5 +1,5 @@
 /**
- * MA Browser Card  v3.1.0
+ * MA Browser Card  v3.2.0
  * A full-featured Music Assistant browser card for Home Assistant
  * GitHub: https://github.com/PMizz13/ma-browser-card
  *
@@ -113,21 +113,22 @@ const CSS = `
   /* ── RETRO THEME ── */
   .card.theme-retro {
     --gold: #22cc00;
-    --gold-bg: rgba(51,255,0,0.1);
-    --gold-border: rgba(51,255,0,0.25);
-    --bg0: #232323;
-    --bg2: #2d2d2d;
-    --bg3: #383838;
-    --bg-sidebar: #1a1a1a;
-    --bg-player: #111111;
-    --t1: #cccccc;
-    --t2: #888888;
-    --t3: #555555;
-    --border: rgba(255,255,255,0.1);
-    font-family: 'Courier New', 'Lucida Console', monospace;
+    --gold-bg: rgba(34,204,0,0.1);
+    --gold-border: rgba(34,204,0,0.3);
+    --bg0: #c0c0c0;
+    --bg2: #d4d0c8;
+    --bg3: #b0aca4;
+    --bg-sidebar: #b8b4ac;
+    --bg-player: #1a1a1a;
+    --t1: #000000;
+    --t2: #444444;
+    --t3: #888888;
+    --border: rgba(0,0,0,0.3);
+    font-family: 'Arial', 'Helvetica', sans-serif;
     font-size: 16px;
   }
-  /* Kill all border radius in retro mode */
+
+  /* ── RETRO: Zero border radius everywhere ── */
   .card.theme-retro,
   .card.theme-retro .sidebar,
   .card.theme-retro .logo,
@@ -154,133 +155,281 @@ const CSS = `
   .card.theme-retro .skel-line,
   .card.theme-retro .spinner { border-radius: 0 !important; }
 
-  /* Title bar — black bg, yellow title, white subtitle */
+  /* ── RETRO: Metallic gradient card background ── */
+  .card.theme-retro {
+    background: linear-gradient(160deg, #d8d4cc 0%, #c0bcb4 30%, #b8b4ac 60%, #c8c4bc 100%);
+  }
+
+  /* ── RETRO: Title bar with yellow scan lines ── */
   .card.theme-retro .logo {
-    background: #000000;
-    border-bottom: 2px solid #22cc00;
+    background: linear-gradient(180deg, #1a1a1a 0%, #222222 100%);
+    border-bottom: 2px solid #000;
     padding: 8px 13px;
   }
   .card.theme-retro .logo-icon {
     background: #cccc00;
-    border: 1px solid #888;
-    box-shadow: 1px 1px 0 rgba(255,255,255,0.15), -1px -1px 0 rgba(0,0,0,0.6);
+    border-top: 2px solid #ffff88;
+    border-left: 2px solid #ffff88;
+    border-bottom: 2px solid #666600;
+    border-right: 2px solid #666600;
   }
   .card.theme-retro .logo-icon ha-icon { color: #000000; --mdc-icon-color: #000000; }
   .card.theme-retro .logo-name {
-    color: #cccc00;
-    font-size: 12px; font-weight: bold;
-    letter-spacing: 0.08em; text-transform: uppercase;
+    color: #ffdd00;
+    font-size: 13px; font-weight: bold;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.8);
   }
   .card.theme-retro .logo-sub {
     color: #ffffff;
-    font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase;
+    font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase;
+    text-shadow: 0 1px 1px rgba(0,0,0,0.8);
   }
 
-  /* Sidebar */
-  .card.theme-retro .sidebar { border-right: 2px solid rgba(255,255,255,0.12); }
-  .card.theme-retro .nav-label { color: #22cc00; font-size: 8px; letter-spacing: 0.15em; }
+  /* ── RETRO: Metallic sidebar ── */
+  .card.theme-retro .sidebar {
+    background: linear-gradient(180deg, #202020 0%, #181818 50%, #1e1e1e 100%);
+    border-right: 2px solid #3a3a3a;
+  }
+  .card.theme-retro .nav-label {
+    color: #555; font-size: 9px; letter-spacing: 0.15em; text-transform: uppercase;
+  }
+
+  /* ── RETRO: 3D nav buttons with LED indicator ── */
   .card.theme-retro .nav-btn {
-    font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: #888;
+    font-size: 11px; font-weight: normal; text-transform: uppercase;
+    letter-spacing: 0.03em; color: #787878;
+    background: linear-gradient(180deg, #505050 0%, #2e2e2e 50%, #424242 100%);
+    border-top: 2px solid #3a3a3a;
+    border-left: 2px solid #3a3a3a;
+    border-bottom: 2px solid #080808;
+    border-right: 2px solid #080808;
+    margin-bottom: 3px;
+    padding-left: 22px;
+    position: relative;
+  }
+  /* LED indicator in top-left corner */
+  .card.theme-retro .nav-btn::before {
+    content: '';
+    position: absolute;
+    left: 7px; top: 50%; transform: translateY(-50%);
+    width: 8px; height: 8px;
+    background: #333;
+    border-top: 1px solid #111;
+    border-left: 1px solid #111;
+    border-bottom: 1px solid #888;
+    border-right: 1px solid #888;
+    box-shadow: inset 0 0 2px rgba(0,0,0,0.5);
+  }
+  /* LED goes green when active */
+  .card.theme-retro .nav-btn.active::before {
+    background: radial-gradient(circle at 35% 35%, #88ff44, #22cc00 60%, #115500);
+    box-shadow: 0 0 4px rgba(34,204,0,0.8), inset 0 0 2px rgba(255,255,255,0.3);
+    border-top-color: #44ff00;
+    border-left-color: #44ff00;
+    border-bottom-color: #115500;
+    border-right-color: #115500;
   }
   .card.theme-retro .nav-btn:hover {
-    background: #2d2d2d; color: #cccccc;
-    box-shadow: inset 1px 1px 0 rgba(255,255,255,0.08), inset -1px -1px 0 rgba(0,0,0,0.4);
+    background: linear-gradient(180deg, #acacac 0%, #8a8a8a 50%, #9e9e9e 100%);
+    color: #000;
   }
   .card.theme-retro .nav-btn.active {
-    background: #111; color: #22cc00;
-    border: 1px solid rgba(51,255,0,0.4);
-    box-shadow: inset 1px 1px 0 rgba(0,0,0,0.6), inset -1px -1px 0 rgba(255,255,255,0.04);
+    /* Pressed in state */
+    background: linear-gradient(180deg, #acacac 0%, #8a8a8a 50%, #9e9e9e 100%);
+    border-top: 2px solid #707068;
+    border-left: 2px solid #707068;
+    border-bottom: 2px solid #e8e4dc;
+    border-right: 2px solid #e8e4dc;
+    color: #000;
   }
 
-  /* Player bar — VFD display feel */
-  .card.theme-retro .player-bar { background: #111111; border-top: 2px solid rgba(255,255,255,0.1); }
-  .card.theme-retro .np-title { color: #22cc00; font-size: 11px; letter-spacing: 0.04em; }
-  .card.theme-retro .np-artist { color: #1a8800; font-size: 10px; }
-  .card.theme-retro .ps-label { color: #555; font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; }
+  /* ── RETRO: Player bar — dark VFD display ── */
+  .card.theme-retro .player-bar {
+    background: linear-gradient(180deg, #1a1a1a 0%, #111111 100%);
+    border-top: 3px solid #000;
+  }
+  .card.theme-retro .np-title  { color: #22cc00; font-size: 12px; letter-spacing: 0.04em; font-weight: bold; }
+  .card.theme-retro .np-artist { color: #158800; font-size: 10px; }
+  .card.theme-retro .ps-label  { color: #444; font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; }
 
-  /* Buttons — raised bevel */
-  .card.theme-retro .ctrl-btn { color: #888; font-size: 14px; }
-  .card.theme-retro .ctrl-btn:hover { color: #cccccc; }
-  .card.theme-retro .ctrl-btn.active { color: #22cc00; }
+  /* ── RETRO: 3D playback buttons ── */
+  .card.theme-retro .ctrl-btn {
+    color: #22cc00; font-size: 14px;
+    background: linear-gradient(180deg, #505050 0%, #2e2e2e 50%, #424242 100%);
+    border-top: 2px solid #3a3a3a;
+    border-left: 2px solid #3a3a3a;
+    border-bottom: 2px solid #080808;
+    border-right: 2px solid #080808;
+    padding: 3px 5px;
+    border-radius: 0 !important;
+  }
+  .card.theme-retro .ctrl-btn:hover { color: #33ee00; background: linear-gradient(180deg, #bcbcbc 0%, #9a9a9a 50%, #aeaeae 100%); }
+  .card.theme-retro .ctrl-btn.active { color: #22cc00; text-shadow: 0 0 4px rgba(34,204,0,0.5); }
+  .card.theme-retro .ctrl-btn:active {
+    border-top: 2px solid #080808; border-left: 2px solid #080808;
+    border-bottom: 2px solid #3a3a3a; border-right: 2px solid #3a3a3a;
+  }
   .card.theme-retro .ctrl-play {
-    background: #2d2d2d; color: #22cc00;
-    border: none;
-    box-shadow: 2px 2px 0 #111, -1px -1px 0 #444, inset 0 0 0 1px rgba(255,255,255,0.05);
+    background: linear-gradient(180deg, #505050 0%, #2e2e2e 50%, #424242 100%);
+    color: #22cc00;
+    border-top: 2px solid #3a3a3a;
+    border-left: 2px solid #3a3a3a;
+    border-bottom: 2px solid #080808;
+    border-right: 2px solid #080808;
+    width: 34px; height: 34px;
   }
-  .card.theme-retro .ctrl-play:hover { transform: none; background: #383838; }
+  .card.theme-retro .ctrl-play:hover { transform: none; background: linear-gradient(180deg, #bcbcbc 0%, #9a9a9a 50%, #aeaeae 100%); color: #33ee00; }
   .card.theme-retro .ctrl-play:active {
-    box-shadow: 1px 1px 0 #111, inset 1px 1px 0 rgba(0,0,0,0.4);
+    border-top: 2px solid #080808; border-left: 2px solid #080808;
+    border-bottom: 2px solid #3a3a3a; border-right: 2px solid #3a3a3a;
   }
 
-  /* Progress bar — inset LCD */
+  /* ── RETRO: Progress bar ── */
   .card.theme-retro .progress-bar {
     background: #0a0a0a; height: 5px;
-    border-top: 1px solid #111; border-bottom: 1px solid #444;
-    box-shadow: inset 0 1px 3px rgba(0,0,0,0.8);
+    border-top: 1px solid #000; border-bottom: 1px solid #333;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.9);
   }
-  .card.theme-retro .progress-fill { background: #22cc00; box-shadow: 0 0 4px rgba(51,255,0,0.5); }
+  .card.theme-retro .progress-fill {
+    background: linear-gradient(90deg, #22cc00, #44ff00);
+    box-shadow: 0 0 4px rgba(34,204,0,0.6);
+  }
 
-  /* Search */
-  .card.theme-retro .search-wrap {
-    background: #0f0f0f; border: 1px solid #444;
-    box-shadow: inset 1px 1px 3px rgba(0,0,0,0.6), inset -1px -1px 0 rgba(255,255,255,0.04);
+  /* ── RETRO: Volume slider — red/yellow/green gradient ── */
+  .card.theme-retro .vol-row { margin-top: 8px; }
+  .card.theme-retro .vol-slider {
+    height: 6px;
+    -webkit-appearance: none; appearance: none;
+    background: linear-gradient(to right,
+      var(--vol-color, #22cc00) 0%,
+      var(--vol-color, #22cc00) var(--vol-pct, 50%),
+      #1a1a1a var(--vol-pct, 50%),
+      #1a1a1a 100%
+    ) !important;
+    border-top: 1px solid #000; border-bottom: 1px solid #444;
   }
-  .card.theme-retro .search-inp { color: #22cc00; font-family: 'Courier New', monospace; font-size: 12px; }
+  .card.theme-retro .vol-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 10px; height: 16px;
+    background: linear-gradient(180deg, #acacac 0%, #8a8a8a 50%, #9e9e9e 100%);
+    border-top: 2px solid #cccccc;
+    border-left: 2px solid #cccccc;
+    border-bottom: 2px solid #606060;
+    border-right: 2px solid #606060;
+    cursor: pointer; border-radius: 0 !important;
+  }
+  .card.theme-retro .vol-slider::-moz-range-thumb {
+    width: 12px; height: 18px;
+    background: linear-gradient(180deg, #acacac 0%, #8a8a8a 50%, #9e9e9e 100%);
+    border-top: 2px solid #cccccc;
+    border-left: 2px solid #cccccc;
+    border-bottom: 2px solid #606060;
+    border-right: 2px solid #606060;
+    cursor: pointer; border-radius: 0 !important;
+  }
+  .card.theme-retro .vol-icon { color: #22cc00; font-size: 14px; }
+
+  /* ── RETRO: Search bar ── */
+  .card.theme-retro .search-wrap {
+    background: #181818;
+    border-top: 2px solid #0a0a0a;
+    border-left: 2px solid #0a0a0a;
+    border-bottom: 2px solid #4a4a4a;
+    border-right: 2px solid #4a4a4a;
+  }
+  .card.theme-retro .search-inp { color: #22cc00; font-size: 13px; }
   .card.theme-retro .search-inp::placeholder { color: #336633; }
 
-  /* Player selector */
+  /* ── RETRO: Player select ── */
   .card.theme-retro .player-sel {
-    background: #0f0f0f; border: 1px solid #444;
-    box-shadow: inset 1px 1px 2px rgba(0,0,0,0.5);
-    color: #22cc00; font-family: 'Courier New', monospace; font-size: 10px;
+    background: #0f0f0f;
+    border-top: 2px solid #000; border-left: 2px solid #000;
+    border-bottom: 2px solid #333; border-right: 2px solid #333;
+    color: #22cc00; font-size: 11px;
   }
 
-  /* Volume */
-  .card.theme-retro .vol-slider {
-    background: linear-gradient(to right, #22cc00 0%, #22cc00 var(--vol-pct,50%), #0f0f0f var(--vol-pct,50%), #0f0f0f 100%);
+  /* ── RETRO: Main content area ── */
+  .card.theme-retro .main { background: #222222; }
+  .card.theme-retro .topbar {
+    background: #262626;
+    border-bottom: 2px solid #0a0a0a;
   }
-  .card.theme-retro .vol-slider::-webkit-slider-thumb { background: #888; }
-  .card.theme-retro .vol-slider::-moz-range-thumb { background: #888; }
+  .card.theme-retro .a-name   { color: #22cc00; font-size: 12px; font-weight: bold; }
+  .card.theme-retro .a-artist { color: #777; font-size: 11px; }
+  .card.theme-retro .sec-title {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em;
+    color: #cccc00; font-weight: bold;
+  }
+  .card.theme-retro .sec-count {
+    background: #161616; border: 1px solid #3a3a3a; color: #777; font-size: 10px;
+  }
 
-  /* Album grid */
+  /* ── RETRO: Album art ── */
   .card.theme-retro .a-art-wrap {
-    border: 1px solid #444;
-    box-shadow: 2px 2px 0 #111, inset -1px -1px 0 rgba(255,255,255,0.03);
+    border-top: 2px solid #484848;
+    border-left: 2px solid #484848;
+    border-bottom: 2px solid #080808;
+    border-right: 2px solid #080808;
+    background: #2a2a2a;
   }
-  .card.theme-retro .a-name { color: #cccccc; font-size: 11px; }
-  .card.theme-retro .a-artist { color: #666; }
   .card.theme-retro .play-circle {
     background: #1a1a1a; color: #22cc00;
-    border: 1px solid #22cc00;
-    box-shadow: 0 0 6px rgba(51,255,0,0.3);
+    border-top: 2px solid #444; border-left: 2px solid #444;
+    border-bottom: 2px solid #000; border-right: 2px solid #000;
   }
   .card.theme-retro .album-card.now-playing .a-art-wrap {
-    border-color: #22cc00;
-    box-shadow: 0 0 8px rgba(51,255,0,0.4), 2px 2px 0 #111;
+    border-top-color: #22cc00; border-left-color: #22cc00;
+    border-bottom-color: #115500; border-right-color: #115500;
   }
 
-  /* Sections */
-  .card.theme-retro .sec-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; color: #cccc00; }
-  .card.theme-retro .sec-count { background: #111; border-color: #444; color: #666; }
+  /* ── RETRO: Section action buttons ── */
   .card.theme-retro .sec-btn {
-    font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em;
-    background: #2d2d2d; border: 1px solid #555; color: #888;
-    box-shadow: 1px 1px 0 #111, -1px -1px 0 #444;
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em;
+    background: linear-gradient(180deg, #303030 0%, #1e1e1e 100%);
+    color: #aaaaaa;
+    border-top: 2px solid #505050;
+    border-left: 2px solid #505050;
+    border-bottom: 2px solid #080808;
+    border-right: 2px solid #080808;
   }
-  .card.theme-retro .sec-btn:hover { background: #22cc00; color: #000; border-color: #22cc00; box-shadow: none; }
+  .card.theme-retro .sec-btn:hover {
+    background: linear-gradient(180deg, #3a3a3a 0%, #282828 100%);
+    color: #cccccc; border-color: inherit;
+  }
 
-  /* Queue */
-  .card.theme-retro .queue-item.active { background: rgba(51,255,0,0.08); border-left: 2px solid #22cc00; }
-  .card.theme-retro .qi-name { color: #cccccc; }
-  .card.theme-retro .queue-item.active .qi-name { color: #22cc00; }
+  /* ── RETRO: Track rows ── */
+  .card.theme-retro .track-row:hover { background: rgba(255,255,255,0.05); }
+  .card.theme-retro .track-row.playing { background: rgba(34,204,0,0.12); }
+  .card.theme-retro .tr-name { color: #22cc00; }
+  .card.theme-retro .track-row.playing .tr-name { color: #22cc00; font-weight: bold; }
 
-  /* Spinner */
-  .card.theme-retro .spinner { border-color: #333; border-top-color: #22cc00; }
+  /* ── RETRO: Queue panel ── */
+  .card.theme-retro .queue-panel { background: #1c1c1c; }
+  .card.theme-retro .queue-header { border-bottom: 2px solid #0a0a0a; }
+  .card.theme-retro .queue-item:hover { background: rgba(255,255,255,0.05); }
+  .card.theme-retro .queue-item.active {
+    background: rgba(34,204,0,0.12);
+    border-left: 3px solid #22cc00;
+  }
+  .card.theme-retro .queue-item.active .qi-name { color: #22cc00; font-weight: bold; }
+  .card.theme-retro .qi-name { color: #22cc00; }
+  .card.theme-retro .qi-artist { color: #666; }
 
-  /* Context menu */
-  .card.theme-retro .ctx-menu { background: #1a1a1a; border: 1px solid #555; box-shadow: 3px 3px 0 #000; }
-  .card.theme-retro .ctx-item:hover { background: #22cc00; color: #000; }
+  /* ── RETRO: Context menu ── */
+  .card.theme-retro .ctx-menu {
+    background: #282828;
+    border-top: 2px solid #4a4a4a; border-left: 2px solid #4a4a4a;
+    border-bottom: 2px solid #080808; border-right: 2px solid #080808;
+    box-shadow: 3px 3px 0 rgba(0,0,0,0.7);
+  }
+  .card.theme-retro .ctx-item { color: #cccccc; font-size: 12px; }
+  .card.theme-retro .ctx-item:hover {
+    background: #000080; color: #ffffff;
+  }
 
+  /* ── RETRO: Spinner ── */
+  .card.theme-retro .spinner { border-color: #888; border-top-color: #22cc00; }
   /* ── TOP SIDEBAR ── */
   .card.sidebar-top { flex-direction: column; }
   .card.sidebar-top .sidebar {
@@ -396,7 +545,7 @@ const CSS = `
   }
   .player-sel:focus { border-color: var(--gold); }
   .vol-row { display: flex; align-items: center; gap: 7px; margin-top: 8px; }
-  .vol-icon { font-size: 12px; color: var(--t3); flex-shrink: 0; cursor: pointer; }
+  .vol-icon { font-size: 12px; color: var(--t3); flex-shrink: 0; cursor: pointer; width: 20px; text-align: center; display: inline-block; }
   .vol-slider {
     flex: 1; -webkit-appearance: none; appearance: none;
     height: 3px; border-radius: 2px; outline: none; cursor: pointer;
@@ -789,6 +938,7 @@ class MABrowserCard extends HTMLElement {
     volEl.addEventListener('input', e => {
       const pct = e.target.value;
       volEl.style.setProperty('--vol-pct', pct + '%');
+      volEl.style.setProperty('--vol-color', this._volColor(+pct));
       const v = pct / 100;
       this.shadowRoot.getElementById('volIcon').textContent = v === 0 ? '🔇︎' : v < 0.3 ? '🔈︎' : v < 0.7 ? '🔉︎' : '🔊︎';
       this._setVolume(v);
@@ -1333,6 +1483,25 @@ class MABrowserCard extends HTMLElement {
   _setVolume(level) { if (!this._selectedPlayer) return; this._hass.callService('media_player', 'volume_set', { entity_id: this._selectedPlayer, volume_level: Math.round(level*100)/100 }); }
   _toggleMute() { if (!this._selectedPlayer) return; const muted = this._hass.states[this._selectedPlayer]?.attributes.is_volume_muted; this._hass.callService('media_player', 'volume_mute', { entity_id: this._selectedPlayer, is_volume_muted: !muted }); }
 
+  // Returns a CSS colour for the volume bar based on percentage (green->orange->red)
+  _volColor(pct) {
+    if (pct <= 50) {
+      // 0-50: green #22cc00 stays green
+      return '#22cc00';
+    } else if (pct <= 75) {
+      // 50-75: green -> orange
+      const t = (pct - 50) / 25;
+      const r = Math.round(34 + (255 - 34) * t);
+      const g = Math.round(204 - (204 - 100) * t);
+      return `rgb(${r},${g},0)`;
+    } else {
+      // 75-100: orange -> red
+      const t = (pct - 75) / 25;
+      const g = Math.round(100 - 100 * t);
+      return `rgb(220,${g},0)`;
+    }
+  }
+
   _startPoll() {
     this._updateNowPlaying();
     this._pollTimer = setInterval(() => this._updateNowPlaying(), 2000);
@@ -1371,7 +1540,7 @@ class MABrowserCard extends HTMLElement {
     if (queueId && this._wsReady) this._wsSend('player_queues/get', { queue_id: queueId }).then(q => { this._maQueueState = q; }).catch(() => {});
     else { const dur = state.attributes.media_duration || 0, pos = state.attributes.media_position || 0; if (dur) this._$('progressFill').style.width = Math.min(100,(pos/dur)*100)+'%'; }
     const vol = state.attributes.volume_level, muted = state.attributes.is_volume_muted;
-    if (vol !== undefined) { const pct = Math.round(vol*100), slider = this._$('volSlider'); slider.value = pct; slider.style.setProperty('--vol-pct', pct+'%'); this._$('volIcon').textContent = muted ? '🔇︎' : vol<0.3 ? '🔈︎' : vol<0.7 ? '🔉︎' : '🔊︎'; }
+    if (vol !== undefined) { const pct = Math.round(vol*100), slider = this._$('volSlider'); slider.value = pct; slider.style.setProperty('--vol-pct', pct+'%'); slider.style.setProperty('--vol-color', this._volColor(pct)); this._$('volIcon').textContent = muted ? '🔇︎' : vol<0.3 ? '🔈︎' : vol<0.7 ? '🔉︎' : '🔊︎'; }
     const contentId = state.attributes.media_content_id || '';
     if (contentId !== this._nowPlayingUri) { this._nowPlayingUri = contentId; this._highlightNowPlaying(); }
   }
