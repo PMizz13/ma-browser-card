@@ -1,4 +1,4 @@
-# MA Browser Card
+# Music Assistant Browser Card
 
 A Music Assistant browser card for Home Assistant. Browse your music library - albums, artists, tracks, playlists and radio stations - with full artwork, search, queue view and playback controls, all within a single Lovelace card. This has been tested when your own media such as a Plex server is linked. I haven't tested it with all providers.
   
@@ -150,6 +150,7 @@ Use the dropdown in the sidebar to switch between MA players. The volume slider 
 - Library browsing loads up to 500 items per section for performance. Search covers your full library regardless of this limit.
 - The card uses a WebSocket connection directly to your MA server for Recently Played, Recently added and the queue view. This requires `ma_url` and `ma_token` to be set.
 - There is a hidden scroll bar in the media view section for use with a mouse or trackpad without a scroll feature, just click on the right side of the pane where you would expect a scroll bar to usually be and it will show up
+- The retro theme does not have a "light" variant
 
 ## Troubleshooting
 
