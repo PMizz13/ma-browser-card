@@ -1,5 +1,11 @@
 # MA Browser Card
 
+## V 3.3.0
+Added the ability to configure the card using the Home Assistant UI.
+
+Removed a duplicate waitWS command.
+Fixed a bug where event listener wasn't removed correctly.
+
 ## V 3.2.0
 A redesign of the Retro theme
 
