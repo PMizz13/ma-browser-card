@@ -47,7 +47,7 @@ Search for MA Browser Card in the HACS store. Or click the button below.
 
 ## Configuration
 
-Making any configuration changes may require a frontend cache reset to repopulate the data correctly. I am working on a fix for this to make it easier.
+The card can be fully configured using the Home Assistant UI from version 3.3.0
 
 ### Finding your `config_entry_id`
 
@@ -149,7 +149,6 @@ Use the dropdown in the sidebar to switch between MA players. The volume slider 
 - The `ma_token` is stored in plaintext in your Lovelace config. Treat it like a password — don't share your dashboard YAML publicly if it contains your token.
 - Library browsing loads up to 500 items per section for performance. Search covers your full library regardless of this limit.
 - The card uses a WebSocket connection directly to your MA server for Recently Played, Recently added and the queue view. This requires `ma_url` and `ma_token` to be set.
-- There is a hidden scroll bar in the media view section for use with a mouse or trackpad without a scroll feature, just click on the right side of the pane where you would expect a scroll bar to usually be and it will show up
 - The retro theme does not have a "light" variant
 
 ## Troubleshooting
