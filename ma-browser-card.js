@@ -1,5 +1,5 @@
 /**
- * MA Browser Card  v3.2.0
+ * MA Browser Card  v3.3.0
  * A full-featured Music Assistant browser card for Home Assistant
  * GitHub: https://github.com/PMizz13/ma-browser-card
  *
@@ -47,8 +47,6 @@
  *     recently_played: 20           # Recently played albums (default: 20, requires ma_token)
  *     recently_added: 20            # Recently added albums (default: 20, requires ma_token)
  *     discover: 20                  # Random discover albums (default: 20)
- *                                   # Controls single-click on album/track
- *                                   # Right-click always shows full Play/Shuffle/Next/Enqueue menu
  *
  *   # Players
  *   players:                        # Optional: limit dropdown to specific MA player entities
@@ -57,7 +55,6 @@
  *
  * ───────────────────────────────────────────────────────────────────────
  */
-
 
 const CSS = `
   :host { display: block; }
@@ -127,7 +124,6 @@ const CSS = `
     font-family: 'Arial', 'Helvetica', sans-serif;
     font-size: 16px;
   }
-
   /* ── RETRO: Zero border radius everywhere ── */
   .card.theme-retro,
   .card.theme-retro .sidebar,
@@ -154,13 +150,11 @@ const CSS = `
   .card.theme-retro .skel-art,
   .card.theme-retro .skel-line,
   .card.theme-retro .spinner { border-radius: 0 !important; }
-
   /* ── RETRO: Metallic gradient card background ── */
   .card.theme-retro {
     background: linear-gradient(160deg, #d8d4cc 0%, #c0bcb4 30%, #b8b4ac 60%, #c8c4bc 100%);
   }
-
-  /* ── RETRO: Title bar with yellow scan lines ── */
+  /* ── RETRO: Title bar ── */
   .card.theme-retro .logo {
     background: linear-gradient(180deg, #1a1a1a 0%, #222222 100%);
     border-bottom: 2px solid #000;
@@ -185,16 +179,12 @@ const CSS = `
     font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase;
     text-shadow: 0 1px 1px rgba(0,0,0,0.8);
   }
-
-  /* ── RETRO: Metallic sidebar ── */
+  /* ── RETRO: Sidebar ── */
   .card.theme-retro .sidebar {
     background: linear-gradient(180deg, #202020 0%, #181818 50%, #1e1e1e 100%);
     border-right: 2px solid #3a3a3a;
   }
-  .card.theme-retro .nav-label {
-    color: #555; font-size: 9px; letter-spacing: 0.15em; text-transform: uppercase;
-  }
-
+  .card.theme-retro .nav-label { color: #555; font-size: 9px; letter-spacing: 0.15em; text-transform: uppercase; }
   /* ── RETRO: 3D nav buttons with LED indicator ── */
   .card.theme-retro .nav-btn {
     font-size: 11px; font-weight: normal; text-transform: uppercase;
@@ -204,47 +194,33 @@ const CSS = `
     border-left: 2px solid #3a3a3a;
     border-bottom: 2px solid #080808;
     border-right: 2px solid #080808;
-    margin-bottom: 3px;
-    padding-left: 22px;
-    position: relative;
+    margin-bottom: 3px; padding-left: 22px; position: relative;
   }
-  /* LED indicator in top-left corner */
   .card.theme-retro .nav-btn::before {
-    content: '';
-    position: absolute;
+    content: ''; position: absolute;
     left: 7px; top: 50%; transform: translateY(-50%);
-    width: 8px; height: 8px;
-    background: #333;
-    border-top: 1px solid #111;
-    border-left: 1px solid #111;
-    border-bottom: 1px solid #888;
-    border-right: 1px solid #888;
+    width: 8px; height: 8px; background: #333;
+    border-top: 1px solid #111; border-left: 1px solid #111;
+    border-bottom: 1px solid #888; border-right: 1px solid #888;
     box-shadow: inset 0 0 2px rgba(0,0,0,0.5);
   }
-  /* LED goes green when active */
   .card.theme-retro .nav-btn.active::before {
     background: radial-gradient(circle at 35% 35%, #88ff44, #22cc00 60%, #115500);
     box-shadow: 0 0 4px rgba(34,204,0,0.8), inset 0 0 2px rgba(255,255,255,0.3);
-    border-top-color: #44ff00;
-    border-left-color: #44ff00;
-    border-bottom-color: #115500;
-    border-right-color: #115500;
+    border-top-color: #44ff00; border-left-color: #44ff00;
+    border-bottom-color: #115500; border-right-color: #115500;
   }
   .card.theme-retro .nav-btn:hover {
     background: linear-gradient(180deg, #acacac 0%, #8a8a8a 50%, #9e9e9e 100%);
     color: #000;
   }
   .card.theme-retro .nav-btn.active {
-    /* Pressed in state */
     background: linear-gradient(180deg, #acacac 0%, #8a8a8a 50%, #9e9e9e 100%);
-    border-top: 2px solid #707068;
-    border-left: 2px solid #707068;
-    border-bottom: 2px solid #e8e4dc;
-    border-right: 2px solid #e8e4dc;
+    border-top: 2px solid #707068; border-left: 2px solid #707068;
+    border-bottom: 2px solid #e8e4dc; border-right: 2px solid #e8e4dc;
     color: #000;
   }
-
-  /* ── RETRO: Player bar — dark VFD display ── */
+  /* ── RETRO: Player bar ── */
   .card.theme-retro .player-bar {
     background: linear-gradient(180deg, #1a1a1a 0%, #111111 100%);
     border-top: 3px solid #000;
@@ -252,17 +228,13 @@ const CSS = `
   .card.theme-retro .np-title  { color: #22cc00; font-size: 12px; letter-spacing: 0.04em; font-weight: bold; }
   .card.theme-retro .np-artist { color: #158800; font-size: 10px; }
   .card.theme-retro .ps-label  { color: #444; font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; }
-
   /* ── RETRO: 3D playback buttons ── */
   .card.theme-retro .ctrl-btn {
     color: #22cc00; font-size: 14px;
     background: linear-gradient(180deg, #505050 0%, #2e2e2e 50%, #424242 100%);
-    border-top: 2px solid #3a3a3a;
-    border-left: 2px solid #3a3a3a;
-    border-bottom: 2px solid #080808;
-    border-right: 2px solid #080808;
-    padding: 3px 5px;
-    border-radius: 0 !important;
+    border-top: 2px solid #3a3a3a; border-left: 2px solid #3a3a3a;
+    border-bottom: 2px solid #080808; border-right: 2px solid #080808;
+    padding: 3px 5px; border-radius: 0 !important;
   }
   .card.theme-retro .ctrl-btn:hover { color: #33ee00; background: linear-gradient(180deg, #bcbcbc 0%, #9a9a9a 50%, #aeaeae 100%); }
   .card.theme-retro .ctrl-btn.active { color: #22cc00; text-shadow: 0 0 4px rgba(34,204,0,0.5); }
@@ -273,10 +245,8 @@ const CSS = `
   .card.theme-retro .ctrl-play {
     background: linear-gradient(180deg, #505050 0%, #2e2e2e 50%, #424242 100%);
     color: #22cc00;
-    border-top: 2px solid #3a3a3a;
-    border-left: 2px solid #3a3a3a;
-    border-bottom: 2px solid #080808;
-    border-right: 2px solid #080808;
+    border-top: 2px solid #3a3a3a; border-left: 2px solid #3a3a3a;
+    border-bottom: 2px solid #080808; border-right: 2px solid #080808;
     width: 34px; height: 34px;
   }
   .card.theme-retro .ctrl-play:hover { transform: none; background: linear-gradient(180deg, #bcbcbc 0%, #9a9a9a 50%, #aeaeae 100%); color: #33ee00; }
@@ -284,7 +254,6 @@ const CSS = `
     border-top: 2px solid #080808; border-left: 2px solid #080808;
     border-bottom: 2px solid #3a3a3a; border-right: 2px solid #3a3a3a;
   }
-
   /* ── RETRO: Progress bar ── */
   .card.theme-retro .progress-bar {
     background: #0a0a0a; height: 5px;
@@ -295,52 +264,39 @@ const CSS = `
     background: linear-gradient(90deg, #22cc00, #44ff00);
     box-shadow: 0 0 4px rgba(34,204,0,0.6);
   }
-
-  /* ── RETRO: Volume slider — red/yellow/green gradient ── */
+  /* ── RETRO: Volume slider ── */
   .card.theme-retro .vol-row { margin-top: 8px; }
   .card.theme-retro .vol-slider {
-    height: 6px;
-    -webkit-appearance: none; appearance: none;
+    height: 6px; -webkit-appearance: none; appearance: none;
     background: linear-gradient(to right,
-      var(--vol-color, #22cc00) 0%,
-      var(--vol-color, #22cc00) var(--vol-pct, 50%),
-      #1a1a1a var(--vol-pct, 50%),
-      #1a1a1a 100%
+      var(--vol-color, #22cc00) 0%, var(--vol-color, #22cc00) var(--vol-pct, 50%),
+      #1a1a1a var(--vol-pct, 50%), #1a1a1a 100%
     ) !important;
     border-top: 1px solid #000; border-bottom: 1px solid #444;
   }
   .card.theme-retro .vol-slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    width: 10px; height: 16px;
+    -webkit-appearance: none; width: 10px; height: 16px;
     background: linear-gradient(180deg, #acacac 0%, #8a8a8a 50%, #9e9e9e 100%);
-    border-top: 2px solid #cccccc;
-    border-left: 2px solid #cccccc;
-    border-bottom: 2px solid #606060;
-    border-right: 2px solid #606060;
+    border-top: 2px solid #cccccc; border-left: 2px solid #cccccc;
+    border-bottom: 2px solid #606060; border-right: 2px solid #606060;
     cursor: pointer; border-radius: 0 !important;
   }
   .card.theme-retro .vol-slider::-moz-range-thumb {
     width: 12px; height: 18px;
     background: linear-gradient(180deg, #acacac 0%, #8a8a8a 50%, #9e9e9e 100%);
-    border-top: 2px solid #cccccc;
-    border-left: 2px solid #cccccc;
-    border-bottom: 2px solid #606060;
-    border-right: 2px solid #606060;
+    border-top: 2px solid #cccccc; border-left: 2px solid #cccccc;
+    border-bottom: 2px solid #606060; border-right: 2px solid #606060;
     cursor: pointer; border-radius: 0 !important;
   }
   .card.theme-retro .vol-icon { color: #22cc00; font-size: 14px; }
-
   /* ── RETRO: Search bar ── */
   .card.theme-retro .search-wrap {
     background: #181818;
-    border-top: 2px solid #0a0a0a;
-    border-left: 2px solid #0a0a0a;
-    border-bottom: 2px solid #4a4a4a;
-    border-right: 2px solid #4a4a4a;
+    border-top: 2px solid #0a0a0a; border-left: 2px solid #0a0a0a;
+    border-bottom: 2px solid #4a4a4a; border-right: 2px solid #4a4a4a;
   }
   .card.theme-retro .search-inp { color: #22cc00; font-size: 13px; }
   .card.theme-retro .search-inp::placeholder { color: #336633; }
-
   /* ── RETRO: Player select ── */
   .card.theme-retro .player-sel {
     background: #0f0f0f;
@@ -348,29 +304,20 @@ const CSS = `
     border-bottom: 2px solid #333; border-right: 2px solid #333;
     color: #22cc00; font-size: 11px;
   }
-
   /* ── RETRO: Main content area ── */
   .card.theme-retro .main { background: #222222; }
-  .card.theme-retro .topbar {
-    background: #262626;
-    border-bottom: 2px solid #0a0a0a;
-  }
+  .card.theme-retro .topbar { background: #262626; border-bottom: 2px solid #0a0a0a; }
   .card.theme-retro .a-name   { color: #22cc00; font-size: 12px; font-weight: bold; }
   .card.theme-retro .a-artist { color: #777; font-size: 11px; }
   .card.theme-retro .sec-title {
     font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em;
     color: #cccc00; font-weight: bold;
   }
-  .card.theme-retro .sec-count {
-    background: #161616; border: 1px solid #3a3a3a; color: #777; font-size: 10px;
-  }
-
+  .card.theme-retro .sec-count { background: #161616; border: 1px solid #3a3a3a; color: #777; font-size: 10px; }
   /* ── RETRO: Album art ── */
   .card.theme-retro .a-art-wrap {
-    border-top: 2px solid #484848;
-    border-left: 2px solid #484848;
-    border-bottom: 2px solid #080808;
-    border-right: 2px solid #080808;
+    border-top: 2px solid #484848; border-left: 2px solid #484848;
+    border-bottom: 2px solid #080808; border-right: 2px solid #080808;
     background: #2a2a2a;
   }
   .card.theme-retro .play-circle {
@@ -382,40 +329,31 @@ const CSS = `
     border-top-color: #22cc00; border-left-color: #22cc00;
     border-bottom-color: #115500; border-right-color: #115500;
   }
-
   /* ── RETRO: Section action buttons ── */
   .card.theme-retro .sec-btn {
     font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em;
     background: linear-gradient(180deg, #303030 0%, #1e1e1e 100%);
     color: #aaaaaa;
-    border-top: 2px solid #505050;
-    border-left: 2px solid #505050;
-    border-bottom: 2px solid #080808;
-    border-right: 2px solid #080808;
+    border-top: 2px solid #505050; border-left: 2px solid #505050;
+    border-bottom: 2px solid #080808; border-right: 2px solid #080808;
   }
   .card.theme-retro .sec-btn:hover {
     background: linear-gradient(180deg, #3a3a3a 0%, #282828 100%);
     color: #cccccc; border-color: inherit;
   }
-
   /* ── RETRO: Track rows ── */
   .card.theme-retro .track-row:hover { background: rgba(255,255,255,0.05); }
   .card.theme-retro .track-row.playing { background: rgba(34,204,0,0.12); }
   .card.theme-retro .tr-name { color: #22cc00; }
   .card.theme-retro .track-row.playing .tr-name { color: #22cc00; font-weight: bold; }
-
   /* ── RETRO: Queue panel ── */
   .card.theme-retro .queue-panel { background: #1c1c1c; }
   .card.theme-retro .queue-header { border-bottom: 2px solid #0a0a0a; }
   .card.theme-retro .queue-item:hover { background: rgba(255,255,255,0.05); }
-  .card.theme-retro .queue-item.active {
-    background: rgba(34,204,0,0.12);
-    border-left: 3px solid #22cc00;
-  }
+  .card.theme-retro .queue-item.active { background: rgba(34,204,0,0.12); border-left: 3px solid #22cc00; }
   .card.theme-retro .queue-item.active .qi-name { color: #22cc00; font-weight: bold; }
   .card.theme-retro .qi-name { color: #22cc00; }
   .card.theme-retro .qi-artist { color: #666; }
-
   /* ── RETRO: Context menu ── */
   .card.theme-retro .ctx-menu {
     background: #282828;
@@ -424,12 +362,10 @@ const CSS = `
     box-shadow: 3px 3px 0 rgba(0,0,0,0.7);
   }
   .card.theme-retro .ctx-item { color: #cccccc; font-size: 12px; }
-  .card.theme-retro .ctx-item:hover {
-    background: #000080; color: #ffffff;
-  }
-
+  .card.theme-retro .ctx-item:hover { background: #000080; color: #ffffff; }
   /* ── RETRO: Spinner ── */
   .card.theme-retro .spinner { border-color: #888; border-top-color: #22cc00; }
+
   /* ── TOP SIDEBAR ── */
   .card.sidebar-top { flex-direction: column; }
   .card.sidebar-top .sidebar {
@@ -474,8 +410,11 @@ const CSS = `
   .card.sidebar-top .player-footer .player-sel { width: 130px; }
   .card.sidebar-top .player-footer .vol-row { margin-top: 0; min-width: 100px; }
   /* sidebar-left player positioning */
-  .card.player-top .sidebar { flex-direction: column-reverse; }
-  .card.player-top.sidebar-left .player-bar { border-top: none; border-bottom: 1px solid var(--border); }
+  /* player-top: use flex order instead of column-reverse so logo always stays first */
+  .card.player-top .sidebar { flex-direction: column; }
+  .card.player-top .sidebar .logo { order: 0; }
+  .card.player-top .sidebar .player-bar { order: 1; border-top: none; border-bottom: 1px solid var(--border); }
+  .card.player-top .sidebar .nav { order: 2; }
 
   /* ── SIDEBAR ── */
   .sidebar {
@@ -840,7 +779,7 @@ class MABrowserCard extends HTMLElement {
     const cardIcon     = this._config.icon     || 'mdi:music';
     if (this._config.columns) this.style.gridColumn = `span ${this._config.columns}`;
 
-    const classes = [themeClass, sidebarTop ? 'sidebar-top' : '', playerTop ? 'player-top' : 'player-bottom'].filter(Boolean).join(' ');
+    const classes = [themeClass, sidebarTop ? 'sidebar-top' : 'sidebar-left', playerTop ? 'player-top' : 'player-bottom'].filter(Boolean).join(' ');
 
     const playerBarHtml = `<div class="player-bar">
         <div class="np-row" id="npRow">
@@ -945,7 +884,8 @@ class MABrowserCard extends HTMLElement {
     });
     this.shadowRoot.getElementById('volIcon').addEventListener('click', () => this._toggleMute());
     this._attachClickHandler();
-    document.addEventListener('click', () => this._dismissCtx());
+    this._boundDismissCtx = () => this._dismissCtx();
+    document.addEventListener('click', this._boundDismissCtx);
     this.shadowRoot.addEventListener('click', e => { if (this._ctxMenu && !this._ctxMenu.contains(e.target)) this._dismissCtx(); });
   }
 
@@ -1114,16 +1054,6 @@ class MABrowserCard extends HTMLElement {
       this._ws.send(JSON.stringify({ message_id: id, command, args }));
       setTimeout(() => { if (this._wsPending[id]) { delete this._wsPending[id]; reject(new Error('MA WS timeout')); } }, 10000);
     });
-  }
-
-  async _waitForWS() {
-    if (this._wsReady) return true;
-    if (!this._ws) return false;
-    await new Promise(resolve => {
-      const check = setInterval(() => { if (this._wsReady) { clearInterval(check); resolve(); } }, 200);
-      setTimeout(() => { clearInterval(check); resolve(); }, 5000);
-    });
-    return this._wsReady;
   }
 
   async _fetchRecentlyAdded(limit = 20) {
@@ -1551,15 +1481,16 @@ class MABrowserCard extends HTMLElement {
     if (this._ws) { this._ws.onclose = null; this._ws.close(); this._ws = null; }
     Object.values(this._imgCache).forEach(url => URL.revokeObjectURL(url));
     this._imgCache = {}; this._libCache = {};
-    document.removeEventListener('click', () => this._dismissCtx());
+    document.removeEventListener('click', this._boundDismissCtx);
   }
 
   getCardSize() { return 6; }
-  static getConfigElement() { return document.createElement('div'); }
+  static getConfigElement() { return document.createElement('ma-browser-card-editor'); }
   static getStubConfig() { return { config_entry_id: 'YOUR_MA_CONFIG_ENTRY_ID', ma_url: 'http://YOUR_MA_IP:8095' }; }
 }
 
 customElements.define('ma-browser-card', MABrowserCard);
+
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: 'ma-browser-card',
@@ -1568,3 +1499,302 @@ window.customCards.push({
   preview: true,
   documentationURL: 'https://github.com/PMizz13/ma-browser-card',
 });
+
+// ── UI EDITOR ─────────────────────────────────────────────────────────
+
+const EDITOR_CSS = `
+  :host { display: block; font-family: var(--paper-font-body1_-_font-family, sans-serif); }
+  .editor { padding: 4px 0 16px; }
+  .section-title {
+    font-size: 11px; font-weight: 600; color: var(--secondary-text-color);
+    margin: 20px 0 8px; padding-bottom: 4px;
+    border-bottom: 1px solid var(--divider-color);
+    text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .field-row { margin-bottom: 12px; }
+  .field-row label { display: block; font-size: 12px; color: var(--secondary-text-color); margin-bottom: 4px; }
+  .field-row input[type=text],
+  .field-row input[type=password],
+  .field-row select {
+    width: 100%; padding: 8px 10px; font-size: 13px;
+    background: var(--card-background-color, #fff);
+    color: var(--primary-text-color, #000);
+    border: 1px solid var(--divider-color, #ccc);
+    border-radius: 4px; box-sizing: border-box; font-family: inherit;
+  }
+  .field-row input[type=text]:focus,
+  .field-row input[type=password]:focus,
+  .field-row select:focus { outline: none; border-color: var(--primary-color, #03a9f4); }
+  .field-row .hint { font-size: 11px; color: var(--disabled-text-color); margin-top: 3px; line-height: 1.4; }
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding: 4px 0; }
+  .toggle-label { font-size: 13px; color: var(--primary-text-color); }
+  .toggle-hint { font-size: 11px; color: var(--disabled-text-color); margin-top: 1px; }
+  .toggle-switch { position: relative; width: 36px; height: 20px; flex-shrink: 0; }
+  .toggle-switch input { opacity: 0; width: 0; height: 0; }
+  .toggle-track { position: absolute; inset: 0; background: var(--divider-color, #ccc); border-radius: 10px; cursor: pointer; transition: background 0.2s; }
+  .toggle-track::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: white; transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+  .toggle-switch input:checked + .toggle-track { background: var(--primary-color, #03a9f4); }
+  .toggle-switch input:checked + .toggle-track::after { transform: translateX(16px); }
+  .slider-row { margin-bottom: 14px; }
+  .slider-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .slider-label { font-size: 13px; color: var(--primary-text-color); flex: 1; }
+  .slider-unit { font-size: 12px; color: var(--secondary-text-color); }
+  .slider-number {
+    width: 52px; padding: 3px 6px; font-size: 12px; text-align: center;
+    background: var(--card-background-color, #fff); color: var(--primary-text-color, #000);
+    border: 1px solid var(--divider-color, #ccc); border-radius: 4px; font-family: inherit;
+    -moz-appearance: textfield;
+  }
+  .slider-number::-webkit-inner-spin-button, .slider-number::-webkit-outer-spin-button { -webkit-appearance: none; }
+  .slider-number:focus { outline: none; border-color: var(--primary-color, #03a9f4); }
+  .slider-hint { font-size: 11px; color: var(--disabled-text-color); margin-top: 3px; }
+  .zero-hint { font-size: 11px; color: var(--warning-color, #f4b942); margin-top: 3px; }
+  .range-wrap { padding: 10px 0; touch-action: none; }
+  input[type=range] {
+    display: block; width: 100%; margin: 0;
+    -webkit-appearance: none; appearance: none;
+    height: 4px; border-radius: 2px; outline: none; cursor: pointer;
+    background: var(--divider-color, #ddd);
+    user-select: none; -webkit-user-select: none;
+  }
+  input[type=range]::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 20px; height: 20px; margin-top: -8px;
+    border-radius: 50%; background: var(--primary-color, #03a9f4);
+    cursor: pointer; border: 2px solid white; box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  }
+  input[type=range]::-moz-range-track { height: 4px; border-radius: 2px; background: var(--divider-color, #ddd); }
+  input[type=range]::-moz-range-thumb {
+    width: 20px; height: 20px; border-radius: 50%;
+    background: var(--primary-color, #03a9f4);
+    cursor: pointer; border: 2px solid white; box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  }
+`;
+
+class MABrowserCardEditor extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: 'open' });
+    this._config = {};
+    this._pendingTimer = null;
+  }
+
+  set hass(hass) { this._hass = hass; }
+
+  setConfig(config) {
+    this._config = { ...config };
+    this._render();
+  }
+
+  _fire(config) {
+    clearTimeout(this._pendingTimer);
+    this._pendingTimer = setTimeout(() => {
+      this.dispatchEvent(new CustomEvent('config-changed', { detail: { config }, bubbles: true, composed: true }));
+    }, 800);
+  }
+
+  _fireNow(config) {
+    clearTimeout(this._pendingTimer);
+    this.dispatchEvent(new CustomEvent('config-changed', { detail: { config }, bubbles: true, composed: true }));
+  }
+
+  _set(key, value, immediate) {
+    if (immediate === undefined) immediate = true;
+    const c = { ...this._config };
+    if (value === '' || value === undefined || value === null) delete c[key];
+    else c[key] = value;
+    this._config = c;
+    immediate ? this._fireNow(c) : this._fire(c);
+  }
+
+  _setSection(key, value, immediate) {
+    if (immediate === undefined) immediate = false;
+    const c = { ...this._config };
+    const sec = { ...(c.home_sections || {}) };
+    if (value === null) delete sec[key];
+    else sec[key] = value;
+    if (Object.keys(sec).length === 0) delete c.home_sections;
+    else c.home_sections = sec;
+    this._config = c;
+    immediate ? this._fireNow(c) : this._fire(c);
+  }
+
+  _v(key, def) { return this._config[key] !== undefined ? this._config[key] : def; }
+  _esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+  _opt(id, val, label) {
+    return '<option value="' + val + '" ' + (this._v(id, val) === val ? 'selected' : '') + '>' + label + '</option>';
+  }
+
+  _render() {
+    const c = this._config;
+    const sec = c.home_sections || {};
+
+    const sp = this._v('sidebar_position', 'left');
+    const pp = this._v('player_position', 'bottom');
+    const th = this._v('theme', 'auto');
+    const ca = this._v('click_action', 'play');
+    const st = this._v('show_title', true);
+
+    this.shadowRoot.innerHTML = '<style>' + EDITOR_CSS + '</style><div class="editor">'
+
+      + '<div class="section-title">Required</div>'
+      + this._textField('config_entry_id', 'Config Entry ID *', c.config_entry_id || '', '01JXXX...', 'Settings \u2192 Devices &amp; Services \u2192 Music Assistant \u2192 Configure \u2014 copy the ID from the URL')
+      + this._textField('ma_url', 'MA Server URL *', c.ma_url || '', 'http://192.168.1.x:8095', 'Your Music Assistant server address including port')
+
+      + '<div class="section-title">Recommended</div>'
+      + this._pwField('ma_token', 'MA Access Token', c.ma_token || '', 'eyJ...', 'MA \u2192 Profile \u2192 Access Tokens \u2014 enables Recently Played &amp; Recently Added')
+
+      + '<div class="section-title">Layout</div>'
+      + '<div class="field-row"><label>Sidebar position</label><select id="sidebar_position">'
+      + '<option value="left"' + (sp === 'left' ? ' selected' : '') + '>Left (default)</option>'
+      + '<option value="top"' + (sp === 'top' ? ' selected' : '') + '>Top (horizontal nav bar)</option>'
+      + '</select></div>'
+      + '<div class="field-row"><label>Player position</label><select id="player_position">'
+      + '<option value="bottom"' + (pp === 'bottom' ? ' selected' : '') + '>Bottom (default)</option>'
+      + '<option value="top"' + (pp === 'top' ? ' selected' : '') + '>Top</option>'
+      + '</select><div class="hint">In top sidebar mode: bottom pins player to card bottom</div></div>'
+
+      + this._sliderField('height', 'Card height', this._v('height', 580), 300, 900, 10, 'px', '')
+      + this._sliderField('sidebar_width', 'Sidebar width', this._v('sidebar_width', 195), 100, 320, 5, 'px', 'Left sidebar only')
+
+      + '<div class="toggle-row"><div><div class="toggle-label">Show title bar</div><div class="toggle-hint">Hide to save vertical space</div></div>'
+      + '<label class="toggle-switch"><input type="checkbox" id="show_title"' + (st ? ' checked' : '') + ' /><span class="toggle-track"></span></label></div>'
+
+      + '<div class="section-title">Appearance</div>'
+      + '<div class="field-row"><label>Theme</label><select id="theme">'
+      + '<option value="auto"' + (th === 'auto' ? ' selected' : '') + '>Auto (follows HA theme)</option>'
+      + '<option value="dark"' + (th === 'dark' ? ' selected' : '') + '>Dark</option>'
+      + '<option value="light"' + (th === 'light' ? ' selected' : '') + '>Light</option>'
+      + '<option value="retro"' + (th === 'retro' ? ' selected' : '') + '>Retro</option>'
+      + '</select></div>'
+      + this._textField('title', 'Title text', c.title || '', 'Music', '')
+      + this._textField('subtitle', 'Subtitle text', c.subtitle || '', 'Music Assistant', '')
+      + this._textField('icon', 'Icon', c.icon || '', 'mdi:music', 'Any MDI icon e.g. mdi:speaker, mdi:headphones, mdi:radio')
+
+      + '<div class="section-title">Behaviour</div>'
+      + '<div class="field-row"><label>Single click action</label><select id="click_action">'
+      + '<option value="play"' + (ca === 'play' ? ' selected' : '') + '>Play immediately (default)</option>'
+      + '<option value="enqueue"' + (ca === 'enqueue' ? ' selected' : '') + '>Add to queue</option>'
+      + '</select><div class="hint">Right-click always shows the full Play / Shuffle / Next / Enqueue menu</div></div>'
+
+      + '<div class="section-title">Home Screen Sections</div>'
+      + '<div class="hint" style="margin-bottom:14px;font-size:12px">Set a section to 0 to hide it entirely</div>'
+      + this._sliderField('sec_radio', 'Radio stations', sec.radio !== undefined ? sec.radio : 50, 0, 50, 1, '', 'favourited stations in MA')
+      + this._sliderField('sec_recently_played', 'Recently played', sec.recently_played !== undefined ? sec.recently_played : 20, 0, 50, 1, '', 'requires ma_token')
+      + this._sliderField('sec_recently_added', 'Recently added', sec.recently_added !== undefined ? sec.recently_added : 20, 0, 50, 1, '', 'requires ma_token')
+      + this._sliderField('sec_discover', 'Discover (random)', sec.discover !== undefined ? sec.discover : 20, 0, 50, 1, '', '')
+
+      + '<div class="section-title">Players</div>'
+      + this._textField('players', 'Player entity IDs', (c.players || []).join(', '), 'Leave blank to auto-detect all MA players', 'Comma-separated e.g. media_player.kitchen, media_player.lounge')
+
+      + '</div>';
+
+    this._attachListeners();
+  }
+
+  _textField(id, label, value, placeholder, hint) {
+    return '<div class="field-row"><label>' + label + '</label>'
+      + '<input type="text" id="' + id + '" value="' + this._esc(value) + '" placeholder="' + this._esc(placeholder) + '" />'
+      + (hint ? '<div class="hint">' + hint + '</div>' : '')
+      + '</div>';
+  }
+
+  _pwField(id, label, value, placeholder, hint) {
+    return '<div class="field-row"><label>' + label + '</label>'
+      + '<input type="password" id="' + id + '" value="' + this._esc(value) + '" placeholder="' + this._esc(placeholder) + '" />'
+      + (hint ? '<div class="hint">' + hint + '</div>' : '')
+      + '</div>';
+  }
+
+  _sliderField(id, label, value, min, max, step, unit, hint) {
+    var isZero = (value === 0 && min === 0 && id.indexOf('sec_') === 0);
+    return '<div class="slider-row">'
+      + '<div class="slider-header">'
+      + '<span class="slider-label">' + label + '</span>'
+      + '<input type="number" class="slider-number" id="' + id + '_num" min="' + min + '" max="' + max + '" step="' + step + '" value="' + value + '" />'
+      + (unit ? '<span class="slider-unit">' + unit + '</span>' : '')
+      + '</div>'
+      + '<div class="range-wrap"><input type="range" id="' + id + '" min="' + min + '" max="' + max + '" step="' + step + '" value="' + value + '" /></div>'
+      + (hint ? '<div class="slider-hint">' + hint + '</div>' : '')
+      + (isZero ? '<div class="zero-hint">\u26a0 This section is hidden</div>' : '')
+      + '</div>';
+  }
+
+  _attachListeners() {
+    var sr = this.shadowRoot;
+    var self = this;
+
+    // Stop pointer events bubbling out — prevents card from stealing drag
+    sr.addEventListener('pointerdown', function(e) { e.stopPropagation(); });
+    sr.addEventListener('mousedown', function(e) { e.stopPropagation(); });
+    sr.addEventListener('touchstart', function(e) { e.stopPropagation(); }, { passive: true });
+
+    // Text fields
+    ['config_entry_id', 'ma_url', 'title', 'subtitle', 'icon'].forEach(function(id) {
+      var el = sr.getElementById(id);
+      if (el) el.addEventListener('change', function() { self._set(id, el.value.trim() || undefined); });
+    });
+
+    // Password
+    var tokenEl = sr.getElementById('ma_token');
+    if (tokenEl) tokenEl.addEventListener('change', function() { self._set('ma_token', tokenEl.value.trim() || undefined); });
+
+    // Players
+    var playersEl = sr.getElementById('players');
+    if (playersEl) playersEl.addEventListener('change', function() {
+      var val = playersEl.value.trim();
+      self._set('players', val ? val.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : undefined);
+    });
+
+    // Selects
+    ['sidebar_position', 'player_position', 'theme', 'click_action'].forEach(function(id) {
+      var el = sr.getElementById(id);
+      if (el) el.addEventListener('change', function() { self._set(id, el.value); });
+    });
+
+    // Toggle
+    var showTitle = sr.getElementById('show_title');
+    if (showTitle) showTitle.addEventListener('change', function() { self._set('show_title', showTitle.checked); });
+
+    // Layout sliders
+    ['height', 'sidebar_width'].forEach(function(id) {
+      var slider = sr.getElementById(id);
+      var numBox = sr.getElementById(id + '_num');
+      if (!slider || !numBox) return;
+      slider.addEventListener('input', function() {
+        numBox.value = slider.value;
+        self._set(id, +slider.value, false);
+      });
+      numBox.addEventListener('change', function() {
+        var v = Math.min(+slider.max, Math.max(+slider.min, +numBox.value));
+        slider.value = v; numBox.value = v;
+        self._set(id, v, true);
+      });
+    });
+
+    // Section sliders
+    var secMap = { 'sec_radio': 'radio', 'sec_recently_played': 'recently_played', 'sec_recently_added': 'recently_added', 'sec_discover': 'discover' };
+    Object.keys(secMap).forEach(function(elId) {
+      var key = secMap[elId];
+      var slider = sr.getElementById(elId);
+      var numBox = sr.getElementById(elId + '_num');
+      if (!slider || !numBox) return;
+      slider.addEventListener('input', function() {
+        numBox.value = slider.value;
+        var zeroHint = slider.closest('.slider-row').querySelector('.zero-hint');
+        if (zeroHint) zeroHint.style.display = (+slider.value === 0) ? '' : 'none';
+        self._setSection(key, +slider.value, false);
+      });
+      numBox.addEventListener('change', function() {
+        var v = Math.min(+slider.max, Math.max(+slider.min, +numBox.value));
+        slider.value = v; numBox.value = v;
+        var zeroHint = slider.closest('.slider-row').querySelector('.zero-hint');
+        if (zeroHint) zeroHint.style.display = (v === 0) ? '' : 'none';
+        self._setSection(key, v, true);
+      });
+    });
+  }
+}
+
+customElements.define('ma-browser-card-editor', MABrowserCardEditor);
