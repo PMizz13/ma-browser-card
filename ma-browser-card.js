@@ -1489,8 +1489,9 @@ class MABrowserCard extends HTMLElement {
   static getStubConfig() { return { config_entry_id: 'YOUR_MA_CONFIG_ENTRY_ID', ma_url: 'http://YOUR_MA_IP:8095' }; }
 }
 
-customElements.define('ma-browser-card', MABrowserCard);
+// ── Card Suggestion ─────────────────────────────────────────────────────────
 
+customElements.define('ma-browser-card', MABrowserCard);
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: 'ma-browser-card',
@@ -1498,6 +1499,22 @@ window.customCards.push({
   description: 'A full-featured Music Assistant browser card — browse albums, artists, tracks, radio and playlists with artwork, search, queue view and playback controls.',
   preview: true,
   documentationURL: 'https://github.com/PMizz13/ma-browser-card',
+  getEntitySuggestion: (hass, entityId) => {
+    if (entityId.split('.')[0] !== 'media_player') return null;
+    const state = hass.states[entityId];
+    const isMassPlayer = state?.attributes.app_id === 'music_assistant'
+      || state?.attributes.mass_player_type
+      || state?.attributes.active_queue;
+    if (!isMassPlayer) return null;
+    return {
+      label: 'MA Browser Card',
+      config: {
+        type: 'custom:ma-browser-card',
+        config_entry_id: 'YOUR_MA_CONFIG_ENTRY_ID',
+        ma_url: 'http://YOUR_MA_IP:8095',
+      },
+    };
+  },
 });
 
 // ── UI EDITOR ─────────────────────────────────────────────────────────
