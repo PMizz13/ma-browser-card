@@ -1,5 +1,12 @@
 # MA Browser Card
 
+## V 3.5.0
+New Feature
+You can now resize artwork tiles.
+
+Bug Fix
+Updated the way artwork is fetched to compensate for the deprecation of the old method by MA
+
 ## V 3.4.0b
 Added compatibility with HA 2026.6 new card suggestion feature
 
