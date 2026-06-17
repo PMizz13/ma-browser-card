@@ -116,6 +116,7 @@ home_sections:                  # Set the number of items to display in each sec
 | `sidebar_position`| No       | left    | Set position of sidebar (left, top)                              |
 | `sidebar_width`   | No       | 195     | Set the sidebar width when positioned to the left in pixels      |
 | `player_position` | No       | bottom  | Position the player to the bottom or top                         |
+| `tile_size      ` | No       | 205     | Adjusts the size of the displayed artwork tiles                  |
 | 'home_sections'   | No       |         |                                                                  |
 | `radio`           | No       | 50      | Text for title card                                              |
 | `recently_played` | No       | 20      | Subtitle for card                                                |
