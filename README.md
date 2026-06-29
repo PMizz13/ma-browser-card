@@ -99,34 +99,42 @@ home_sections:                  # Set the number of items to display in each sec
   recently_played: 2
   recently_added: 3
   discover: 4
+  favourite_playlists: 0        # Favourited playlists (default: 0 = off).
+  favourite_albums: 0           # Favourited albums (default: 0 = off)
+  favourite_artists: 0          # Favourited artists (default: 0 = off)
+  favourite_tracks: 0           # Favourited tracks (default: 0 = off)
 ```
 
 ### Config options
 
-| Option            | Required | Default | Description                                                      |
-| ----------------- | -------- | ------- | ---------------------------------------------------------------- |
-|**Functionality**  |          |         |                                                                  |
-| `config_entry_id` | Yes      | -       | Your MA integration config entry ID                              |
-| `ma_url`          | Yes      | -       | URL of your MA server, e.g. `http://192.168.1.x:8095`            |
-| `ma_token`        | No       | -       | MA access token — enables Recently Played and Recently Added     |
-| `players`         | No       | all     | List of `media_player` entity IDs to show in the player selector |
-| `click_action`    | No       | play    | What to do when media is clicked (play, enqueue)                 |
-|**Layout**         |          |         |                                                                  |
-| `height`          | No       | `580`   | Card height in pixels                                            |
-| `sidebar_position`| No       | left    | Set position of sidebar (left, top)                              |
-| `sidebar_width`   | No       | 195     | Set the sidebar width when positioned to the left in pixels      |
-| `player_position` | No       | bottom  | Position the player to the bottom or top                         |
-| `tile_size      ` | No       | 205     | Adjusts the size of the displayed artwork tiles                  |
-| 'home_sections'   | No       |         |                                                                  |
-| `radio`           | No       | 50      | Text for title card                                              |
-| `recently_played` | No       | 20      | Subtitle for card                                                |
-| `recently_added`  | No       | 20      | Text for title card                                              |
-| `discover`        | No       | 20      | Subtitle for card                                                |
-| **Appearance**    |          |         |                                                                  |
-| `title`           | No       | Music   | Text for title card                                              |
-| `subtitle`        | No       | Music Assistant | Subtitle for card                                        |
-| `icon`            | No       | mdi:music | Icon for card (any mdi)                                        |
-| `theme`           | No       | auto    | Theme for card, (dark, light, retro, auto (use Home Assistant theme))   |
+| Option               | Required | Default | Description                                                      |
+| -------------------- | -------- | ------- | ---------------------------------------------------------------- |
+|**Functionality**     |          |         |                                                                  |
+| `config_entry_id`    | Yes      | -       | Your MA integration config entry ID                              |
+| `ma_url`             | Yes      | -       | URL of your MA server, e.g. `http://192.168.1.x:8095`            |
+| `ma_token`           | No       | -       | MA access token — enables Recently Played and Recently Added     |
+| `players`            | No       | all     | List of `media_player` entity IDs to show in the player selector |
+| `click_action`       | No       | play    | What to do when media is clicked (play, enqueue)                 |
+|**Layout**            |          |         |                                                                  |
+| `height`             | No       | `580`   | Card height in pixels                                            |
+| `sidebar_position`   | No       | left    | Set position of sidebar (left, top)                              |
+| `sidebar_width`      | No       | 195     | Set the sidebar width when positioned to the left in pixels      |
+| `player_position`    | No       | bottom  | Position the player to the bottom or top                         |
+| `tile_size      `    | No       | 205     | Adjusts the size of the displayed artwork tiles                  |
+| 'home_sections'      | No       |         |                                                                  |
+| `radio`              | No       | 50      | Set number of saved radio stations to display                    |
+| `recently_played`    | No       | 20      | Set number of recently played albums to display                  |
+| `recently_added`     | No       | 20      | Set number of recently added music to display                    |
+| `discover`           | No       | 20      | Set number of discovery queue to display                         |
+| `favourite_playlists`| No       | 0       | Set number of favourite playlists to display                     |
+| `favourite_albums`   | No       | 0       | Set number of favourite albums to display                        |
+| `favourite_artists`  | No       | 0       | Set number of favourite artists to display                       |
+| `favourite_tracks`   | No       | 0       | Set number of favourite tracks to display                        |
+| **Appearance**       |          |         |                                                                  |
+| `title`              | No       | Music   | Text for title card                                              |
+| `subtitle`           | No       | Music Assistant | Subtitle for card                                        |
+| `icon`               | No       | mdi:music | Icon for card (any mdi)                                        |
+| `theme`              | No       | auto    | Theme for card, (dark, light, retro, auto (use Home Assistant theme))   |
 ## Usage
 
 ### Browsing
