@@ -1,5 +1,5 @@
 /**
- * MA Browser Card  v3.5.2
+ * MA Browser Card  v3.6.0
  * A full-featured Music Assistant browser card for Home Assistant
  * GitHub: https://github.com/PMizz13/ma-browser-card
  *
@@ -46,10 +46,10 @@
  *
  *   # Home screen section limits (set to 0 to hide a section entirely)
  *   home_sections:
- *     favorite_playlists: 0         # Favorited playlists (default: 0 = off). Shown at top.
- *     favorite_albums: 0            # Favorited albums (default: 0 = off)
- *     favorite_artists: 0           # Favorited artists (default: 0 = off)
- *     favorite_tracks: 0            # Favorited tracks (default: 0 = off)
+ *     favourite_playlists: 0        # Favourited playlists (default: 0 = off). Shown at top.
+ *     favourite_albums: 0           # Favourited albums (default: 0 = off)
+ *     favourite_artists: 0          # Favourited artists (default: 0 = off)
+ *     favourite_tracks: 0           # Favourited tracks (default: 0 = off)
  *     radio: 50                     # Radio stations (default: 50)
  *     recently_played: 20           # Recently played albums (default: 20, requires ma_token)
  *     recently_added: 20            # Recently added albums (default: 20, requires ma_token)
@@ -1109,10 +1109,10 @@ class MABrowserCard extends HTMLElement {
     this._loading();
     try {
       const sec = this._config.home_sections || {};
-      const favPlaylistsLimit = sec.favorite_playlists ?? 0;
-      const favAlbumsLimit    = sec.favorite_albums    ?? 0;
-      const favArtistsLimit   = sec.favorite_artists   ?? 0;
-      const favTracksLimit    = sec.favorite_tracks    ?? 0;
+      const favPlaylistsLimit = sec.favourite_playlists ?? 0;
+      const favAlbumsLimit    = sec.favourite_albums    ?? 0;
+      const favArtistsLimit   = sec.favourite_artists   ?? 0;
+      const favTracksLimit    = sec.favourite_tracks    ?? 0;
       const radioLimit   = sec.radio          ?? 50;
       const playedLimit  = sec.recently_played ?? 20;
       const addedLimit   = sec.recently_added  ?? 20;
@@ -1129,10 +1129,10 @@ class MABrowserCard extends HTMLElement {
       ]);
       const [favPlaylists, favAlbums, favArtists, favTracks, radio, recentlyPlayed, recentAlbums, random] = results.map(r => r.value ?? []);
       let html = '';
-      if (favPlaylists.length) html += this._section('Favorite Playlists', favPlaylists.map(a => this._albumCardHtml(a,'playlist')).join(''), 'album-grid', favPlaylists.length, this._sectionActions(favPlaylists));
-      if (favAlbums.length)    html += this._section('Favorite Albums', favAlbums.map(a => this._albumCardHtml(a)).join(''), 'album-grid', favAlbums.length, this._sectionActions(favAlbums));
-      if (favArtists.length)   html += this._section('Favorite Artists', favArtists.map(a => this._artistCardHtml(a)).join(''), 'artist-grid', favArtists.length);
-      if (favTracks.length)    html += this._section('Favorite Tracks', favTracks.map((t,i) => this._trackRowHtml(t,i+1)).join(''), 'track-list', favTracks.length, this._sectionActions(favTracks));
+      if (favPlaylists.length) html += this._section('Favourite Playlists', favPlaylists.map(a => this._albumCardHtml(a,'playlist')).join(''), 'album-grid', favPlaylists.length, this._sectionActions(favPlaylists));
+      if (favAlbums.length)    html += this._section('Favourite Albums', favAlbums.map(a => this._albumCardHtml(a)).join(''), 'album-grid', favAlbums.length, this._sectionActions(favAlbums));
+      if (favArtists.length)   html += this._section('Favourite Artists', favArtists.map(a => this._artistCardHtml(a)).join(''), 'artist-grid', favArtists.length);
+      if (favTracks.length)    html += this._section('Favourite Tracks', favTracks.map((t,i) => this._trackRowHtml(t,i+1)).join(''), 'track-list', favTracks.length, this._sectionActions(favTracks));
       if (radio.length)          html += this._section('Radio Stations', radio.map(a => this._radioCardHtml(a)).join(''), 'radio-grid');
       if (recentlyPlayed.length) html += this._section('Recently Played', recentlyPlayed.map(a => this._maItemCardHtml(a)).join(''), 'album-grid');
       if (recentAlbums.length)   html += this._section('Recently Added', recentAlbums.map(a => this._maItemCardHtml(a)).join(''), 'album-grid');
@@ -1668,6 +1668,10 @@ class MABrowserCardEditor extends HTMLElement {
 
       + '<div class="section-title">Home Screen Sections</div>'
       + '<div class="hint" style="margin-bottom:14px;font-size:12px">Set a section to 0 to hide it entirely</div>'
+      + this._sliderField('sec_favourite_playlists', 'Favourite playlists', sec.favourite_playlists !== undefined ? sec.favourite_playlists : 0, 0, 50, 1, '', 'favourited playlists in MA')
+      + this._sliderField('sec_favourite_albums', 'Favourite albums', sec.favourite_albums !== undefined ? sec.favourite_albums : 0, 0, 50, 1, '', 'favourited albums in MA')
+      + this._sliderField('sec_favourite_artists', 'Favourite artists', sec.favourite_artists !== undefined ? sec.favourite_artists : 0, 0, 50, 1, '', 'favourited artists in MA')
+      + this._sliderField('sec_favourite_tracks', 'Favourite tracks', sec.favourite_tracks !== undefined ? sec.favourite_tracks : 0, 0, 50, 1, '', 'favourited tracks in MA')
       + this._sliderField('sec_radio', 'Radio stations', sec.radio !== undefined ? sec.radio : 50, 0, 50, 1, '', 'favourited stations in MA')
       + this._sliderField('sec_recently_played', 'Recently played', sec.recently_played !== undefined ? sec.recently_played : 20, 0, 50, 1, '', 'requires ma_token')
       + this._sliderField('sec_recently_added', 'Recently added', sec.recently_added !== undefined ? sec.recently_added : 20, 0, 50, 1, '', 'requires ma_token')
@@ -1761,8 +1765,17 @@ class MABrowserCardEditor extends HTMLElement {
       });
     });
 
-    // Section sliders
-    var secMap = { 'sec_radio': 'radio', 'sec_recently_played': 'recently_played', 'sec_recently_added': 'recently_added', 'sec_discover': 'discover' };
+    // Section sliders — includes new favourite_* keys
+    var secMap = {
+      'sec_favourite_playlists': 'favourite_playlists',
+      'sec_favourite_albums':    'favourite_albums',
+      'sec_favourite_artists':   'favourite_artists',
+      'sec_favourite_tracks':    'favourite_tracks',
+      'sec_radio':               'radio',
+      'sec_recently_played':     'recently_played',
+      'sec_recently_added':      'recently_added',
+      'sec_discover':            'discover'
+    };
     Object.keys(secMap).forEach(function(elId) {
       var key = secMap[elId];
       var slider = sr.getElementById(elId);
