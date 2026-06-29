@@ -1,5 +1,8 @@
 # MA Browser Card
 
+## V 3.6.0
+Adds optional favourites section to the main dashboard. Contribution by DrHack1
+
 ## V 3.5.2
 Fixed a bug in the artwork fetch
 
