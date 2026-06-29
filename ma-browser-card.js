@@ -46,6 +46,10 @@
  *
  *   # Home screen section limits (set to 0 to hide a section entirely)
  *   home_sections:
+ *     favorite_playlists: 0         # Favorited playlists (default: 0 = off). Shown at top.
+ *     favorite_albums: 0            # Favorited albums (default: 0 = off)
+ *     favorite_artists: 0           # Favorited artists (default: 0 = off)
+ *     favorite_tracks: 0            # Favorited tracks (default: 0 = off)
  *     radio: 50                     # Radio stations (default: 50)
  *     recently_played: 20           # Recently played albums (default: 20, requires ma_token)
  *     recently_added: 20            # Recently added albums (default: 20, requires ma_token)
@@ -1105,18 +1109,30 @@ class MABrowserCard extends HTMLElement {
     this._loading();
     try {
       const sec = this._config.home_sections || {};
+      const favPlaylistsLimit = sec.favorite_playlists ?? 0;
+      const favAlbumsLimit    = sec.favorite_albums    ?? 0;
+      const favArtistsLimit   = sec.favorite_artists   ?? 0;
+      const favTracksLimit    = sec.favorite_tracks    ?? 0;
       const radioLimit   = sec.radio          ?? 50;
       const playedLimit  = sec.recently_played ?? 20;
       const addedLimit   = sec.recently_added  ?? 20;
       const discoverLimit = sec.discover       ?? 20;
       const results = await Promise.allSettled([
+        favPlaylistsLimit ? this._getLibrary('playlist', 'sort_name', favPlaylistsLimit, true) : Promise.resolve([]),
+        favAlbumsLimit    ? this._getLibrary('album',    'sort_name', favAlbumsLimit,    true) : Promise.resolve([]),
+        favArtistsLimit   ? this._getLibrary('artist',   'sort_name', favArtistsLimit,   true) : Promise.resolve([]),
+        favTracksLimit    ? this._getLibrary('track',    'sort_name', favTracksLimit,    true) : Promise.resolve([]),
         radioLimit   ? this._getLibrary('radio', 'sort_name', radioLimit, true) : Promise.resolve([]),
         playedLimit  ? this._fetchRecentlyPlayed(playedLimit)  : Promise.resolve([]),
         addedLimit   ? this._fetchRecentlyAdded(addedLimit)    : Promise.resolve([]),
         discoverLimit ? this._fetchLibrary('album', 'random', discoverLimit) : Promise.resolve([]),
       ]);
-      const [radio, recentlyPlayed, recentAlbums, random] = results.map(r => r.value ?? []);
+      const [favPlaylists, favAlbums, favArtists, favTracks, radio, recentlyPlayed, recentAlbums, random] = results.map(r => r.value ?? []);
       let html = '';
+      if (favPlaylists.length) html += this._section('Favorite Playlists', favPlaylists.map(a => this._albumCardHtml(a,'playlist')).join(''), 'album-grid', favPlaylists.length, this._sectionActions(favPlaylists));
+      if (favAlbums.length)    html += this._section('Favorite Albums', favAlbums.map(a => this._albumCardHtml(a)).join(''), 'album-grid', favAlbums.length, this._sectionActions(favAlbums));
+      if (favArtists.length)   html += this._section('Favorite Artists', favArtists.map(a => this._artistCardHtml(a)).join(''), 'artist-grid', favArtists.length);
+      if (favTracks.length)    html += this._section('Favorite Tracks', favTracks.map((t,i) => this._trackRowHtml(t,i+1)).join(''), 'track-list', favTracks.length, this._sectionActions(favTracks));
       if (radio.length)          html += this._section('Radio Stations', radio.map(a => this._radioCardHtml(a)).join(''), 'radio-grid');
       if (recentlyPlayed.length) html += this._section('Recently Played', recentlyPlayed.map(a => this._maItemCardHtml(a)).join(''), 'album-grid');
       if (recentAlbums.length)   html += this._section('Recently Added', recentAlbums.map(a => this._maItemCardHtml(a)).join(''), 'album-grid');
