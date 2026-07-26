@@ -1,5 +1,8 @@
 # MA Browser Card
 
+## V 3.6.1
+Added placeholder artwork when art isnt found for a tile. Using an SVG of the Music Assistant logo.
+
 ## V 3.6.0
 Adds optional favourites section to the main dashboard. Contribution by DrHack1
 
