@@ -1,5 +1,5 @@
 /**
- * MA Browser Card  v3.6.1
+ * MA Browser Card  v3.7.0b
  * A full-featured Music Assistant browser card for Home Assistant
  * GitHub: https://github.com/PMizz13/ma-browser-card
  *
@@ -398,6 +398,7 @@ class MABrowserCard extends HTMLElement {
           <button class="ctrl-play" id="btnPlay">&#x25B6;&#xFE0E;</button>
           <button class="ctrl-btn" id="btnNext">&#x23ED;&#xFE0E;</button>
           <button class="ctrl-btn" id="btnRepeat" title="Repeat">&#x21BA;&#xFE0E;</button>
+          <button class="ctrl-btn" id="btnClearQueue" title="Clear queue">&#x2298;&#xFE0E;</button>
         </div>
         <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
         <div class="ps-label">Playing on</div>
@@ -468,6 +469,7 @@ class MABrowserCard extends HTMLElement {
     this.shadowRoot.getElementById('btnNext').addEventListener('click', () => this._playerCmd('next'));
     this.shadowRoot.getElementById('btnShuffle').addEventListener('click', () => this._toggleShuffle());
     this.shadowRoot.getElementById('btnRepeat').addEventListener('click', () => this._toggleRepeat());
+    this.shadowRoot.getElementById('btnClearQueue').addEventListener('click', () => this._clearQueue());
     this.shadowRoot.getElementById('npRow').addEventListener('click', () => this._toggleQueue());
     const volEl = this.shadowRoot.getElementById('volSlider');
     volEl.addEventListener('input', e => {
@@ -605,9 +607,16 @@ class MABrowserCard extends HTMLElement {
   }
   async _playMedia(uri, mediaType, enqueue='play') {
     if(!this._selectedPlayer){alert('Select a player first');return;}
-    const isShuffle=enqueue==='shuffle';
-    if(isShuffle) await this._hass.callService('media_player','shuffle_set',{entity_id:this._selectedPlayer,shuffle:true});
-    await this._hass.callService('music_assistant','play_media',{entity_id:this._selectedPlayer,media_id:uri,media_type:mediaType||'album',enqueue:isShuffle?'play':enqueue});
+    const isShuffle    = enqueue === 'shuffle';
+    const isShuffleAdd = enqueue === 'shuffle_add';
+    const isPlayNow    = enqueue === 'play' || isShuffle;
+    // Clear the queue first for "play now" and "shuffle now" actions
+    if(isPlayNow) await this._clearQueue();
+    if(isShuffle || isShuffleAdd) {
+      await this._hass.callService('media_player','shuffle_set',{entity_id:this._selectedPlayer,shuffle:true});
+    }
+    const maEnqueue = isShuffleAdd ? 'add' : 'play';
+    await this._hass.callService('music_assistant','play_media',{entity_id:this._selectedPlayer,media_id:uri,media_type:mediaType||'album',enqueue:maEnqueue});
     this._lastNpKey='';
   }
 
@@ -888,9 +897,10 @@ class MABrowserCard extends HTMLElement {
     this._dismissCtx();
     const menu=document.createElement('div'); menu.className='ctx-menu';
     menu.innerHTML=`<div class="ctx-item" data-enqueue="play"><span class="ctx-ico">&#x25B6;&#xFE0E;</span>Play now</div>
-      <div class="ctx-item" data-enqueue="shuffle"><span class="ctx-ico">&#x21C4;&#xFE0E;</span>Shuffle play</div>
+      <div class="ctx-item" data-enqueue="shuffle"><span class="ctx-ico">&#x21C4;&#xFE0E;</span>Shuffle now</div>
       <div class="ctx-item" data-enqueue="next"><span class="ctx-ico">&#x23ED;&#xFE0E;</span>Play next</div>
-      <div class="ctx-item" data-enqueue="add"><span class="ctx-ico">+</span>Add to queue</div>`;
+      <div class="ctx-item" data-enqueue="add"><span class="ctx-ico">+</span>Add to queue</div>
+      <div class="ctx-item" data-enqueue="shuffle_add"><span class="ctx-ico">&#x21C4;&#xFE0E;</span>Shuffle add to queue</div>`;
     menu.querySelectorAll('.ctx-item').forEach(item=>item.addEventListener('click',e=>{e.stopPropagation();this._playMedia(uri,type,item.dataset.enqueue);this._dismissCtx();}));
     const card=this.shadowRoot.querySelector('.card'); card.appendChild(menu); this._ctxMenu=menu;
     const cardRect=card.getBoundingClientRect(); let mx=x-cardRect.left,my=y-cardRect.top;
@@ -939,6 +949,13 @@ class MABrowserCard extends HTMLElement {
     } catch(e){const qs=panel.querySelector('#qScroll');if(qs)qs.innerHTML=`<div class="state-box"><div class="err-txt">${e.message}</div></div>`;}
   }
   _hideQueue(){this._queueVisible=false;const p=this.shadowRoot.getElementById('queuePanel');if(p)p.remove();}
+  async _clearQueue() {
+    if(!this._selectedPlayer) return;
+    const queueId = this._hass.states[this._selectedPlayer]?.attributes?.active_queue;
+    if(!queueId) return;
+    try { await this._wsSend('player_queues/clear', { queue_id: queueId }); }
+    catch(e) { console.warn('[MA Card] clear queue failed:', e); }
+  }
   _togglePlay(){if(!this._selectedPlayer)return;const s=this._hass.states[this._selectedPlayer]?.state;this._hass.callService('media_player',s==='playing'?'media_pause':'media_play',{entity_id:this._selectedPlayer});}
   _playerCmd(cmd){if(!this._selectedPlayer)return;this._hass.callService('media_player',cmd==='previous'?'media_previous_track':'media_next_track',{entity_id:this._selectedPlayer});}
   _toggleShuffle(){if(!this._selectedPlayer)return;const cur=this._hass.states[this._selectedPlayer]?.attributes.shuffle;this._hass.callService('media_player','shuffle_set',{entity_id:this._selectedPlayer,shuffle:!cur});}
