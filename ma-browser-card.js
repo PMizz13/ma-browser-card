@@ -1,5 +1,5 @@
 /**
- * MA Browser Card  v3.7.0b
+ * MA Browser Card  v3.7.1b
  * A full-featured Music Assistant browser card for Home Assistant
  * GitHub: https://github.com/PMizz13/ma-browser-card
  *
@@ -610,12 +610,18 @@ class MABrowserCard extends HTMLElement {
     const isShuffle    = enqueue === 'shuffle';
     const isShuffleAdd = enqueue === 'shuffle_add';
     const isPlayNow    = enqueue === 'play' || isShuffle;
-    // Clear the queue first for "play now" and "shuffle now" actions
-    if(isPlayNow) await this._clearQueue();
+    // Clear queue before "play now" / "shuffle now" via HA service —
+    // works both locally and remotely (Nabu Casa), unlike the direct MA WS.
+    if(isPlayNow) {
+      try { await this._hass.callService('media_player','clear_playlist',{entity_id:this._selectedPlayer}); }
+      catch(e) { console.warn('[MA Card] clear_playlist failed:', e); }
+    }
     if(isShuffle || isShuffleAdd) {
       await this._hass.callService('media_player','shuffle_set',{entity_id:this._selectedPlayer,shuffle:true});
     }
-    const maEnqueue = isShuffleAdd ? 'add' : 'play';
+    // Preserve correct enqueue value for each action:
+    // play/shuffle → 'play', next → 'next', add/shuffle_add → 'add'
+    const maEnqueue = (enqueue === 'add' || isShuffleAdd) ? 'add' : enqueue === 'next' ? 'next' : 'play';
     await this._hass.callService('music_assistant','play_media',{entity_id:this._selectedPlayer,media_id:uri,media_type:mediaType||'album',enqueue:maEnqueue});
     this._lastNpKey='';
   }
@@ -951,9 +957,7 @@ class MABrowserCard extends HTMLElement {
   _hideQueue(){this._queueVisible=false;const p=this.shadowRoot.getElementById('queuePanel');if(p)p.remove();}
   async _clearQueue() {
     if(!this._selectedPlayer) return;
-    const queueId = this._hass.states[this._selectedPlayer]?.attributes?.active_queue;
-    if(!queueId) return;
-    try { await this._wsSend('player_queues/clear', { queue_id: queueId }); }
+    try { await this._hass.callService('media_player','clear_playlist',{entity_id:this._selectedPlayer}); }
     catch(e) { console.warn('[MA Card] clear queue failed:', e); }
   }
   _togglePlay(){if(!this._selectedPlayer)return;const s=this._hass.states[this._selectedPlayer]?.state;this._hass.callService('media_player',s==='playing'?'media_pause':'media_play',{entity_id:this._selectedPlayer});}
@@ -1153,3 +1157,4 @@ class MABrowserCardEditor extends HTMLElement {
 }
 
 customElements.define('ma-browser-card-editor', MABrowserCardEditor);
+
