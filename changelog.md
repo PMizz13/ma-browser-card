@@ -1,5 +1,10 @@
 # MA Browser Card
 
+## V 3.7.0
+Queue Management Improvements
+- New clear queue button
+- Changed the right click options to add to queue, insert next or clear queue and play
+
 ## V 3.6.1
 Added placeholder artwork when art isnt found for a tile. Using an SVG of the Music Assistant logo.
 
