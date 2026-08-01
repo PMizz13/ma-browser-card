@@ -1,6 +1,9 @@
 # MA Browser Card
 
-## V 3.7.0
+## V 3.7.2
+Fixed an issue with the press and hold menu for touchscreen devices not showing correctly.
+
+## V 3.7.1
 Queue Management Improvements
 - New clear queue button
 - Changed the right click options to add to queue, insert next or clear queue and play
