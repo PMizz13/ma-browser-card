@@ -1,5 +1,5 @@
 /**
- * MA Browser Card  v3.7.1b
+ * MA Browser Card  v3.7.2
  * A full-featured Music Assistant browser card for Home Assistant
  * GitHub: https://github.com/PMizz13/ma-browser-card
  *
@@ -343,6 +343,9 @@ const CSS = `
   .err-txt { font-size:12px; line-height:1.6; color:var(--t2); }
   .retry-btn { background:var(--gold-bg); color:var(--gold); border:1px solid var(--gold-border); padding:7px 16px; border-radius:20px; font-size:12px; font-weight:500; cursor:pointer; font-family:inherit; margin-top:4px; }
   .retry-btn:hover { background:var(--gold); color:#111; }
+  /* Disable native touch interactions on scroll content */
+  .scroll .album-card, .scroll .track-row, .scroll .artist-card { -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
+  .a-art-wrap, .ar-img, .tr-art { -webkit-touch-callout: none; }
 `;
 
 class MABrowserCard extends HTMLElement {
@@ -485,6 +488,10 @@ class MABrowserCard extends HTMLElement {
     this._boundDismissCtx = () => this._dismissCtx();
     document.addEventListener('click', this._boundDismissCtx);
     this.shadowRoot.addEventListener('click', e => { if (this._ctxMenu && !this._ctxMenu.contains(e.target)) this._dismissCtx(); });
+    // Suppress native context menu on images so our long-press handler works
+    this.shadowRoot.addEventListener('contextmenu', e => {
+      if (e.target.closest('.scroll')) e.preventDefault();
+    });
   }
 
   async _init() {
@@ -547,17 +554,34 @@ class MABrowserCard extends HTMLElement {
       if (maLogoType) this._loadMaLogo(el, maLogoType); else el.innerHTML = ph;
       return;
     }
-    if (this._imgCache[url]) { if (el.isConnected) el.innerHTML = `<img src="${this._imgCache[url]}" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" />`; return; }
-    if (el.isConnected) {
-      const img = document.createElement('img');
-      img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:inherit;';
-      img.onload = () => { this._imgCache[url] = url; };
-      img.onerror = () => {
-        if (!el.isConnected) return;
-        if (maLogoType) this._loadMaLogo(el, maLogoType); else el.innerHTML = ph;
-      };
-      img.src = url; el.innerHTML = ''; el.appendChild(img);
+    if (this._imgCache[url]) {
+      if (el.isConnected) {
+        el.innerHTML = '';
+        el.style.backgroundImage = `url("${this._imgCache[url]}")`;
+        el.style.backgroundSize = 'cover';
+        el.style.backgroundPosition = 'center';
+      }
+      return;
     }
+    // Use a hidden img to load/verify the URL, then apply as background-image.
+    // background-image never triggers the iOS native image callout/save sheet.
+    const img = document.createElement('img');
+    img.style.cssText = 'position:absolute;width:0;height:0;opacity:0;pointer-events:none;';
+    img.onload = () => {
+      this._imgCache[url] = url;
+      if (el.isConnected) {
+        el.innerHTML = '';
+        el.style.backgroundImage = `url("${url}")`;
+        el.style.backgroundSize = 'cover';
+        el.style.backgroundPosition = 'center';
+      }
+    };
+    img.onerror = () => {
+      if (!el.isConnected) return;
+      if (maLogoType) this._loadMaLogo(el, maLogoType); else el.innerHTML = ph;
+    };
+    img.src = url;
+    if (el.isConnected) el.appendChild(img);
   }
 
   _hydrateImages() {
@@ -882,9 +906,37 @@ class MABrowserCard extends HTMLElement {
 
   _attachClickHandler() {
     const scroll=this._scroll();
-    scroll.removeEventListener('click',this._boundClick); scroll.removeEventListener('contextmenu',this._boundCtx);
-    this._boundClick=e=>this._handleClick(e); this._boundCtx=e=>this._handleCtx(e);
-    scroll.addEventListener('click',this._boundClick); scroll.addEventListener('contextmenu',this._boundCtx);
+    scroll.removeEventListener('click',this._boundClick);
+    scroll.removeEventListener('contextmenu',this._boundCtx);
+    scroll.removeEventListener('touchstart',this._boundTouchStart);
+    scroll.removeEventListener('touchend',this._boundTouchEnd);
+    scroll.removeEventListener('touchmove',this._boundTouchMove);
+
+    this._boundClick = e => this._handleClick(e);
+    this._boundCtx   = e => this._handleCtx(e);
+
+    // Long-press for touch devices — fires context menu after 500ms hold
+    let _lpTimer = null;
+    let _lpMoved = false;
+    this._boundTouchStart = e => {
+      _lpMoved = false;
+      const touch = e.touches[0];
+      const target = e.target.closest('.album-card') || e.target.closest('.track-row');
+      if (!target || !target.dataset.uri) return;
+      _lpTimer = setTimeout(() => {
+        if (!_lpMoved) {
+          this._showCtxMenu(touch.clientX, touch.clientY, target.dataset.uri, target.dataset.type || 'album', target.dataset.name || '');
+        }
+      }, 500);
+    };
+    this._boundTouchMove = () => { _lpMoved = true; clearTimeout(_lpTimer); };
+    this._boundTouchEnd  = () => { clearTimeout(_lpTimer); };
+
+    scroll.addEventListener('click', this._boundClick);
+    scroll.addEventListener('contextmenu', this._boundCtx);
+    scroll.addEventListener('touchstart',  this._boundTouchStart, { passive: false });
+    scroll.addEventListener('touchmove',   this._boundTouchMove,  { passive: true });
+    scroll.addEventListener('touchend',    this._boundTouchEnd,   { passive: true });
   }
   _handleClick(e) {
     this._dismissCtx();
@@ -926,7 +978,9 @@ class MABrowserCard extends HTMLElement {
     const state=this._hass.states[this._selectedPlayer];
     const artPath=state?.attributes.entity_picture_local||state?.attributes.entity_picture||null;
     const title=state?.attributes.media_title||'Queue',artist=state?.attributes.media_artist||'';
-    panel.innerHTML=`<div class="queue-header"><div class="queue-art">${artPath?`<img src="${artPath}" style="width:100%;height:100%;object-fit:cover;border-radius:7px;" />`:'&#9834;&#xFE0E;'}</div><div class="queue-title-wrap"><div class="queue-title" id="qTitle">${this._esc(title)}</div><div class="queue-subtitle" id="qSub">${this._esc(artist)}</div></div><button class="queue-close" id="qClose">&#x2715;&#xFE0E;</button></div><div class="queue-scroll" id="qScroll"><div class="state-box"><div class="spinner"></div></div></div>`;
+    const queueArtStyle = artPath ? `background-image:url("${artPath}");background-size:cover;background-position:center;` : '';
+    const queueArtContent = artPath ? '' : '&#9834;&#xFE0E;';
+    panel.innerHTML=`<div class="queue-header"><div class="queue-art" style="${queueArtStyle}">${queueArtContent}</div><div class="queue-title-wrap"><div class="queue-title" id="qTitle">${this._esc(title)}</div><div class="queue-subtitle" id="qSub">${this._esc(artist)}</div></div><button class="queue-close" id="qClose">&#x2715;&#xFE0E;</button></div><div class="queue-scroll" id="qScroll"><div class="state-box"><div class="spinner"></div></div></div>`;
     card.appendChild(panel); panel.querySelector('#qClose').addEventListener('click',()=>this._hideQueue());
     try {
       const queueId=this._hass.states[this._selectedPlayer]?.attributes?.active_queue;
@@ -1000,8 +1054,19 @@ class MABrowserCard extends HTMLElement {
     this._$('npArtist').textContent=state.attributes.media_artist||'\u2014';
     const artPath=state.attributes.entity_picture_local||state.attributes.entity_picture||null;
     const artEl=this._$('npArt');
-    if(artPath){if(artEl.querySelector('img')?.getAttribute('src')!==artPath)artEl.innerHTML=`<img src="${artPath}" style="width:100%;height:100%;object-fit:cover;border-radius:6px;" onerror="this.style.display='none'" />`;}
-    else artEl.innerHTML='&#9834;&#xFE0E;';
+    if(artPath){
+      if(artEl.dataset.src!==artPath){
+        artEl.dataset.src=artPath;
+        artEl.innerHTML='';
+        artEl.style.backgroundImage=`url("${artPath}")`;
+        artEl.style.backgroundSize='cover';
+        artEl.style.backgroundPosition='center';
+      }
+    } else {
+      artEl.dataset.src='';
+      artEl.style.backgroundImage='';
+      artEl.innerHTML='&#9834;&#xFE0E;';
+    }
     const queueId=state.attributes.active_queue;
     if(queueId&&this._wsReady)this._wsSend('player_queues/get',{queue_id:queueId}).then(q=>{this._maQueueState=q;}).catch(()=>{});
     else{const dur=state.attributes.media_duration||0,pos=state.attributes.media_position||0;if(dur)this._$('progressFill').style.width=Math.min(100,(pos/dur)*100)+'%';}
@@ -1157,4 +1222,3 @@ class MABrowserCardEditor extends HTMLElement {
 }
 
 customElements.define('ma-browser-card-editor', MABrowserCardEditor);
-
