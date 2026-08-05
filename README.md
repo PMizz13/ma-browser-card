@@ -24,6 +24,7 @@ A Music Assistant browser card for Home Assistant. Browse your music library - a
 - Fits to your theme
 - Party mode for queueing up tracks
 - Have your favourite playlists, albums, tracks and/or artists on the home screen
+- New queue management options. Clear the queue, add to the queue or replace it.
 
 ## Requirements
 
