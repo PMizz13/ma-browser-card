@@ -170,12 +170,10 @@ Add a `players:` list to your config with the exact entity IDs from Developer To
 **No artwork showing**
 Check that your MA server is reachable at the `ma_url` you configured. Artwork is fetched directly from MA.
 
-**Recently Played section missing**
+**Recently Played section missing or not updating**
 Add `ma_token` to your config. Without it the section is skipped silently.
 If this is in the card yaml then reset the cache.
-
-**Recently Played section not changing**
-A known bug in Music Assistant where certain players do not track played tracks. You will need to wait on a fix from Music Assistant.
+There is a known bug in Music Assistant where certain players do not track played tracks. You will need to wait on a fix from Music Assistant.
 
 **Card not loading**
 Check the browser console (F12) for errors. Make sure the resource is registered as a JavaScript Module (not a regular JS file).
