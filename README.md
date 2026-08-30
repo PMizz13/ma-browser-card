@@ -116,7 +116,7 @@ home_sections:                  # Set the number of items to display in each sec
 | `ma_url`             | Yes      | -       | URL of your MA server, e.g. `http://192.168.1.x:8095`            |
 | `ma_token`           | No       | -       | MA access token — enables Recently Played and Recently Added     |
 | `players`            | No       | all     | List of `media_player` entity IDs to show in the player selector |
-| `click_action`       | No       | play    | What to do when media is clicked (play, enqueue)                 |
+| `click_action`       | No       | play    | What to do when media is clicked (play, enqueue, browse)         |
 |**Layout**            |          |         |                                                                  |
 | `height`             | No       | `580`   | Card height in pixels                                            |
 | `sidebar_position`   | No       | left    | Set position of sidebar (left, top)                              |
