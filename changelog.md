@@ -1,5 +1,11 @@
 # MA Browser Card
 
+## V 3.8.0
+Added "Browse Tracks" option to long press menu on albums & Playlists
+Added "Browse Albums" option to long press menu on Artists
+Added the "Browse" option to list of options for default single click in config options
+Expanded scope of "Recently Played" items to include artists
+
 ## V 3.7.2
 Fixed an issue with the press and hold menu for touchscreen devices not showing correctly.
 
