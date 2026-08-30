@@ -1,5 +1,5 @@
 /**
- * MA Browser Card  v3.7.2
+ * MA Browser Card  v3.8.0
  * A full-featured Music Assistant browser card for Home Assistant
  * GitHub: https://github.com/PMizz13/ma-browser-card
  *
@@ -35,7 +35,12 @@
  *   icon: mdi:music
  *
  *   # Behaviour
- *   click_action: play              # play | enqueue
+ *   click_action: play              # play | enqueue | browse
+ *                                    #   browse: albums/playlists open their track list instead
+ *                                    #   of playing immediately (artists already do this).
+ *                                    #   Right-click / long-press always shows the full menu,
+ *                                    #   which also includes "Browse tracks" for albums and
+ *                                    #   playlists regardless of this setting.
  *
  *   # Home screen sections (0 = hide)
  *   home_sections:
@@ -663,11 +668,16 @@ class MABrowserCard extends HTMLElement {
     if(!this._maToken||!this._maUrl) return;
     if(this._ws){this._ws.close();this._ws=null;}
     const wsUrl=this._maUrl.replace('http://','ws://').replace('https://','wss://')+'/ws';
-    const ws=new WebSocket(wsUrl); this._ws=ws; this._wsReady=false;
+    const ws=new WebSocket(wsUrl); this._ws=ws; this._wsReady=false; this._wsGreeted=false;
     ws.onmessage=e=>{
       const msg=JSON.parse(e.data);
+      if(!this._wsGreeted){this._wsGreeted=true;console.debug('[MA Card] MA WS first message:',msg);}
       if(msg.server_version&&!msg.message_id){ws.send(JSON.stringify({message_id:'auth',command:'auth',args:{token:this._maToken}}));return;}
-      if(msg.message_id==='auth'){if(msg.result?.authenticated)this._wsReady=true;return;}
+      if(msg.message_id==='auth'){
+        if(msg.result?.authenticated){this._wsReady=true;}
+        else{console.error('[MA Card] MA WS auth did not succeed \u2014 full response:',msg);}
+        return;
+      }
       const pending=this._wsPending[msg.message_id];
       if(pending){delete this._wsPending[msg.message_id];msg.error_code?pending.reject(new Error(msg.details||'MA error '+msg.error_code)):pending.resolve(msg.result);}
     };
@@ -692,8 +702,8 @@ class MABrowserCard extends HTMLElement {
     if(!this._maToken) return [];
     if(!await this._waitForWS()) return [];
     try {
-      const items=await this._wsSend('music/recently_played_items',{limit,media_types:['album']});
-      const seen=new Set(); return(Array.isArray(items)?items:[]).filter(i=>{if(seen.has(i.name))return false;seen.add(i.name);return true;});
+      const items=await this._wsSend('music/recently_played_items',{limit,media_types:['album','artist']});
+      const seen=new Set(); return(Array.isArray(items)?items:[]).filter(i=>{const key=i.uri||i.name;if(seen.has(key))return false;seen.add(key);return true;});
     } catch(e){console.warn('[MA Card] recently_played failed:',e.message);return[];}
   }
 
@@ -796,6 +806,43 @@ class MABrowserCard extends HTMLElement {
       this._hydrateImages(); this._attachClickHandler();
     } catch(e){this._err(e,()=>this._renderArtistDetail(artistName,artUrl));}
   }
+  // MA URIs look like {provider_instance_id_or_domain}://{media_type}/{item_id}
+  // e.g. "library://album/50" or "spotify://playlist/1a2b3c".
+  _parseUri(uri) {
+    const m=/^([^:]+):\/\/[^/]+\/(.+)$/.exec(uri||'');
+    return m?{provider:m[1],item_id:m[2]}:null;
+  }
+  // "Browse" click action: show an album's or playlist's tracks instead of
+  // playing immediately. Requires ma_token (uses the direct MA WebSocket,
+  // same as Recently Played/Added) — falls back to playing if unavailable.
+  async _renderContentDetail(uri,type,name,artist,artUrl) {
+    this._loading();
+    try {
+      const parsed=this._parseUri(uri);
+      if(!parsed) throw new Error('Could not read that item\u2019s URI.');
+      if(!await this._waitForWS()){
+        console.warn('[MA Card] Browse needs ma_token configured \u2014 playing instead.');
+        this._playMedia(uri,type,'play');
+        return;
+      }
+      const command=type==='playlist'?'music/playlists/playlist_tracks':'music/albums/album_tracks';
+      const result=await this._wsSend(command,{item_id:parsed.item_id,provider_instance_id_or_domain:parsed.provider});
+      const tracks=Array.isArray(result)?result:(result?.items??[]);
+      const ph=this._placeholder(type);
+      const artAttrs=artUrl?`data-img="${this._esc(artUrl)}" data-placeholder-type="${type}"`:'';
+      const inAlbum=type==='album';
+      this._scroll().innerHTML=`<div class="artist-hdr">
+          <div class="a-art-wrap" style="width:90px;height:90px;flex-shrink:0" ${artAttrs}>${ph}</div>
+          <div>
+            <div class="artist-detail-name">${this._esc(name)}</div>
+            ${artist?`<div class="a-artist" style="margin-bottom:8px">${this._esc(artist)}</div>`:''}
+            <button class="artist-detail-back" data-action="back">&#x2190; Back</button>
+          </div>
+        </div>
+        ${tracks.length?this._section('Tracks',tracks.map((t,i)=>this._trackRowHtml(t,i+1,inAlbum)).join(''),'track-list',tracks.length,this._sectionActions(tracks)):'<div class="state-box">No tracks found</div>'}`;
+      this._hydrateImages(); this._attachClickHandler();
+    } catch(e){this._err(e,()=>this._renderContentDetail(uri,type,name,artist,artUrl));}
+  }
   async _renderTracks() {
     this._loading();
     try{const items=await this._getLibrary('track','sort_name',500);this._scroll().innerHTML=this._section('All Tracks',items.map((t,i)=>this._trackRowHtml(t,i+1)).join(''),'track-list',items.length);this._hydrateImages();this._attachClickHandler();}
@@ -842,7 +889,7 @@ class MABrowserCard extends HTMLElement {
       ? `data-img="${this._esc(artUrl)}" data-placeholder-type="${mediaType}"`
       : (useMaLogo ? `data-ma-logo="${mediaType}"` : '');
     const artist=this._artistName(item),uri=item.uri||'',name=item.name||'';
-    return `<div class="album-card" data-uri="${this._esc(uri)}" data-type="${mediaType}" data-name="${this._esc(name)}" data-artist="${this._esc(artist)}">
+    return `<div class="album-card" data-uri="${this._esc(uri)}" data-type="${mediaType}" data-name="${this._esc(name)}" data-artist="${this._esc(artist)}" data-art="${this._esc(artUrl||'')}">
       <div class="a-art-wrap" ${artAttrs}>${ph}<div class="a-overlay"><div class="play-circle">&#x25B6;&#xFE0E;</div></div><div class="playing-badge">&#x25B6;&#xFE0E; playing</div></div>
       <div class="a-name" title="${this._esc(name)}">${this._esc(name)}</div>
       <div class="a-artist">${this._esc(artist)}</div>
@@ -850,31 +897,42 @@ class MABrowserCard extends HTMLElement {
     </div>`;
   }
 
+  _maItemArtUrl(item) {
+    if(typeof item.image==='string'&&item.image) return item.image;
+    if(item.image?.proxy_id) return `${this._maUrl}/imageproxy/${item.image.proxy_id}`;
+    if(item.image?.path) return `${this._maUrl}/imageproxy?path=${encodeURIComponent(item.image.path)}&provider=${encodeURIComponent(item.image.provider||'')}&size=256&fmt=jpeg`;
+    if(item.metadata?.images?.[0]?.proxy_id) return `${this._maUrl}/imageproxy/${item.metadata.images[0].proxy_id}`;
+    if(item.metadata?.images?.[0]?.path){const img=item.metadata.images[0];return `${this._maUrl}/imageproxy?path=${encodeURIComponent(img.path)}&provider=${encodeURIComponent(img.provider||'')}&size=256&fmt=jpeg`;}
+    return null;
+  }
   _maItemCardHtml(item) {
-    let artUrl=null;
-    if(typeof item.image==='string'&&item.image){artUrl=item.image;}
-    else if(item.image?.proxy_id){artUrl=`${this._maUrl}/imageproxy/${item.image.proxy_id}`;}
-    else if(item.image?.path){artUrl=`${this._maUrl}/imageproxy?path=${encodeURIComponent(item.image.path)}&provider=${encodeURIComponent(item.image.provider||'')}&size=256&fmt=jpeg`;}
-    else if(item.metadata?.images?.[0]?.proxy_id){artUrl=`${this._maUrl}/imageproxy/${item.metadata.images[0].proxy_id}`;}
-    else if(item.metadata?.images?.[0]?.path){const img=item.metadata.images[0];artUrl=`${this._maUrl}/imageproxy?path=${encodeURIComponent(img.path)}&provider=${encodeURIComponent(img.provider||'')}&size=256&fmt=jpeg`;}
     const mediaType=item.media_type||'album';
+    const artUrl=this._maItemArtUrl(item);
+    if(mediaType==='artist'){
+      // Render like the Artists tab, but with the same uri/type dataset album
+      // cards use, so it goes through the unified click/context-menu logic.
+      const name=item.name||'',uri=item.uri||'';
+      const ph=this._placeholder('artist');
+      const artAttrs=artUrl?`data-img="${this._esc(artUrl)}" data-placeholder-type="artist"`:'';
+      return `<div class="artist-card" data-uri="${this._esc(uri)}" data-type="artist" data-name="${this._esc(name)}" data-art="${this._esc(artUrl||'')}"><div class="ar-img" ${artAttrs}>${ph}</div><div class="ar-name">${this._esc(name)}</div></div>`;
+    }
     const ph=this._placeholder(mediaType);
-    const useMaLogo = !artUrl && mediaType !== 'track' && mediaType !== 'artist';
+    const useMaLogo = !artUrl && mediaType !== 'track';
     const artAttrs=artUrl
       ? `data-img="${this._esc(artUrl)}" data-placeholder-type="${mediaType}"`
       : (useMaLogo ? `data-ma-logo="${mediaType}"` : '');
     const uri=item.uri||'',name=item.name||'';
-    return `<div class="album-card" data-uri="${this._esc(uri)}" data-type="${mediaType}" data-name="${this._esc(name)}" data-artist="">
+    return `<div class="album-card" data-uri="${this._esc(uri)}" data-type="${mediaType}" data-name="${this._esc(name)}" data-artist="" data-art="${this._esc(artUrl||'')}">
       <div class="a-art-wrap" ${artAttrs}>${ph}<div class="a-overlay"><div class="play-circle">&#x25B6;&#xFE0E;</div></div></div>
       <div class="a-name" title="${this._esc(name)}">${this._esc(name)}</div>
     </div>`;
   }
 
   _artistCardHtml(item) {
-    const artUrl=this._artUrl(item),name=item.name||'';
+    const artUrl=this._artUrl(item),name=item.name||'',uri=item.uri||'';
     const ph=this._placeholder('artist');
     const artAttrs=artUrl?`data-img="${this._esc(artUrl)}" data-placeholder-type="artist"`:'';
-    return `<div class="artist-card" data-action="artist-detail" data-name="${this._esc(name)}" data-art="${this._esc(artUrl||'')}"><div class="ar-img" ${artAttrs}>${ph}</div><div class="ar-name">${this._esc(name)}</div></div>`;
+    return `<div class="artist-card" data-uri="${this._esc(uri)}" data-type="artist" data-name="${this._esc(name)}" data-art="${this._esc(artUrl||'')}"><div class="ar-img" ${artAttrs}>${ph}</div><div class="ar-name">${this._esc(name)}</div></div>`;
   }
 
   _trackRowHtml(item,num,inAlbum) {
@@ -897,7 +955,7 @@ class MABrowserCard extends HTMLElement {
       ? `data-img="${this._esc(artUrl)}" data-placeholder-type="radio"`
       : `data-ma-logo="radio"`;
     const uri=item.uri||'',name=item.name||'',desc=item.metadata?.description||'';
-    return `<div class="album-card" data-uri="${this._esc(uri)}" data-type="radio" data-name="${this._esc(name)}" data-artist="">
+    return `<div class="album-card" data-uri="${this._esc(uri)}" data-type="radio" data-name="${this._esc(name)}" data-artist="" data-art="${this._esc(artUrl||'')}">
       <div class="a-art-wrap" ${artAttrs}>${ph}<div class="a-overlay"><div class="play-circle">&#x25B6;&#xFE0E;</div></div></div>
       <div class="a-name" title="${this._esc(name)}">${this._esc(name)}</div>
       ${desc?`<div class="a-artist">${this._esc(desc)}</div>`:''}
@@ -921,11 +979,11 @@ class MABrowserCard extends HTMLElement {
     this._boundTouchStart = e => {
       _lpMoved = false;
       const touch = e.touches[0];
-      const target = e.target.closest('.album-card') || e.target.closest('.track-row');
+      const target = e.target.closest('.album-card') || e.target.closest('.artist-card') || e.target.closest('.track-row');
       if (!target || !target.dataset.uri) return;
       _lpTimer = setTimeout(() => {
         if (!_lpMoved) {
-          this._showCtxMenu(touch.clientX, touch.clientY, target.dataset.uri, target.dataset.type || 'album', target.dataset.name || '');
+          this._showCtxMenu(touch.clientX, touch.clientY, target.dataset.uri, target.dataset.type || 'album', target.dataset.name || '', target.dataset.artist || '', target.dataset.art || '');
         }
       }, 500);
     };
@@ -940,26 +998,53 @@ class MABrowserCard extends HTMLElement {
   }
   _handleClick(e) {
     this._dismissCtx();
-    const albumEl=e.target.closest('.album-card'); if(albumEl&&albumEl.dataset.uri){const action=this._config.click_action||'play';this._playMedia(albumEl.dataset.uri,albumEl.dataset.type,action==='enqueue'?'add':'play');return;}
+    const cardEl=e.target.closest('.album-card')||e.target.closest('.artist-card');
+    if(cardEl&&cardEl.dataset.uri){
+      const action=this._config.click_action||'play';
+      const type=cardEl.dataset.type;
+      if(action==='browse'){
+        if(type==='album'||type==='playlist'){
+          this._renderContentDetail(cardEl.dataset.uri,type,cardEl.dataset.name,cardEl.dataset.artist,cardEl.dataset.art);
+          return;
+        }
+        if(type==='artist'){
+          this._renderArtistDetail(cardEl.dataset.name,cardEl.dataset.art);
+          return;
+        }
+      }
+      this._playMedia(cardEl.dataset.uri,type,action==='enqueue'?'add':'play');
+      return;
+    }
     const trackEl=e.target.closest('.track-row'); if(trackEl&&trackEl.dataset.uri){this._playMedia(trackEl.dataset.uri,'track');return;}
-    const artistEl=e.target.closest('.artist-card'); if(artistEl){this._renderArtistDetail(artistEl.dataset.name,artistEl.dataset.art);return;}
     const secBtn=e.target.closest('.sec-btn'); if(secBtn){this._playAll(JSON.parse(secBtn.dataset.items||'[]'),secBtn.dataset.action==='shuffle-all');return;}
     const backEl=e.target.closest('[data-action="back"]'); if(backEl){this._renderView(this._view);return;}
   }
   _handleCtx(e) {
-    const el=e.target.closest('.album-card')||e.target.closest('.track-row');
+    const el=e.target.closest('.album-card')||e.target.closest('.artist-card')||e.target.closest('.track-row');
     if(!el||!el.dataset.uri) return; e.preventDefault();
-    this._showCtxMenu(e.clientX,e.clientY,el.dataset.uri,el.dataset.type||'album',el.dataset.name||'');
+    this._showCtxMenu(e.clientX,e.clientY,el.dataset.uri,el.dataset.type||'album',el.dataset.name||'',el.dataset.artist||'',el.dataset.art||'');
   }
-  _showCtxMenu(x,y,uri,type,name) {
+  _showCtxMenu(x,y,uri,type,name,artist,artUrl) {
     this._dismissCtx();
     const menu=document.createElement('div'); menu.className='ctx-menu';
-    menu.innerHTML=`<div class="ctx-item" data-enqueue="play"><span class="ctx-ico">&#x25B6;&#xFE0E;</span>Play now</div>
+    const browseLabel=type==='artist'?'Browse albums':'Browse tracks';
+    const browseItem=(type==='album'||type==='playlist'||type==='artist')
+      ?`<div class="ctx-item" data-browse="1"><span class="ctx-ico">&#x2630;&#xFE0E;</span>${browseLabel}</div>`
+      :'';
+    menu.innerHTML=`${browseItem}<div class="ctx-item" data-enqueue="play"><span class="ctx-ico">&#x25B6;&#xFE0E;</span>Play now</div>
       <div class="ctx-item" data-enqueue="shuffle"><span class="ctx-ico">&#x21C4;&#xFE0E;</span>Shuffle now</div>
       <div class="ctx-item" data-enqueue="next"><span class="ctx-ico">&#x23ED;&#xFE0E;</span>Play next</div>
       <div class="ctx-item" data-enqueue="add"><span class="ctx-ico">+</span>Add to queue</div>
       <div class="ctx-item" data-enqueue="shuffle_add"><span class="ctx-ico">&#x21C4;&#xFE0E;</span>Shuffle add to queue</div>`;
-    menu.querySelectorAll('.ctx-item').forEach(item=>item.addEventListener('click',e=>{e.stopPropagation();this._playMedia(uri,type,item.dataset.enqueue);this._dismissCtx();}));
+    menu.querySelectorAll('.ctx-item').forEach(item=>item.addEventListener('click',e=>{
+      e.stopPropagation();
+      if(item.dataset.browse){
+        if(type==='artist') this._renderArtistDetail(name,artUrl);
+        else this._renderContentDetail(uri,type,name,artist,artUrl);
+      }
+      else this._playMedia(uri,type,item.dataset.enqueue);
+      this._dismissCtx();
+    }));
     const card=this.shadowRoot.querySelector('.card'); card.appendChild(menu); this._ctxMenu=menu;
     const cardRect=card.getBoundingClientRect(); let mx=x-cardRect.left,my=y-cardRect.top;
     menu.style.cssText=`position:absolute;left:${mx}px;top:${my}px;`;
@@ -983,6 +1068,7 @@ class MABrowserCard extends HTMLElement {
     panel.innerHTML=`<div class="queue-header"><div class="queue-art" style="${queueArtStyle}">${queueArtContent}</div><div class="queue-title-wrap"><div class="queue-title" id="qTitle">${this._esc(title)}</div><div class="queue-subtitle" id="qSub">${this._esc(artist)}</div></div><button class="queue-close" id="qClose">&#x2715;&#xFE0E;</button></div><div class="queue-scroll" id="qScroll"><div class="state-box"><div class="spinner"></div></div></div>`;
     card.appendChild(panel); panel.querySelector('#qClose').addEventListener('click',()=>this._hideQueue());
     try {
+      if(!await this._waitForWS()) throw new Error('Queue view needs the MA access token (ma_token) configured, and your browser must be able to reach the MA server directly.');
       const queueId=this._hass.states[this._selectedPlayer]?.attributes?.active_queue;
       if(!queueId) throw new Error('No active queue found');
       const queueState=await this._wsSend('player_queues/get',{queue_id:queueId});
@@ -1173,7 +1259,7 @@ class MABrowserCardEditor extends HTMLElement {
       +this._textField('subtitle','Subtitle text',c.subtitle||'','Music Assistant','')
       +this._textField('icon','Icon',c.icon||'','mdi:music','Any MDI icon e.g. mdi:speaker, mdi:headphones, mdi:radio')
       +'<div class="section-title">Behaviour</div>'
-      +'<div class="field-row"><label>Single click action</label><select id="click_action"><option value="play"'+(ca==='play'?' selected':'')+'>Play immediately (default)</option><option value="enqueue"'+(ca==='enqueue'?' selected':'')+'>Add to queue</option></select><div class="hint">Right-click always shows the full Play / Shuffle / Next / Enqueue menu</div></div>'
+      +'<div class="field-row"><label>Single click action</label><select id="click_action"><option value="play"'+(ca==='play'?' selected':'')+'>Play immediately (default)</option><option value="enqueue"'+(ca==='enqueue'?' selected':'')+'>Add to queue</option><option value="browse"'+(ca==='browse'?' selected':'')+'>Browse (show tracks)</option></select><div class="hint">Browse opens an album or playlist\u2019s track list instead of playing it (artists already open their albums this way). Requires an MA access token. Also available any time via right-click / long-press \u2192 "Browse tracks", regardless of this setting</div></div>'
       +'<div class="section-title">Home Screen Sections</div>'
       +'<div class="hint" style="margin-bottom:14px;font-size:12px">Set a section to 0 to hide it entirely</div>'
       +this._sliderField('sec_favourite_playlists','Favourite playlists',sec.favourite_playlists??0,0,50,1,'','favourited playlists in MA')
