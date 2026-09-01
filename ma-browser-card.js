@@ -1,5 +1,5 @@
 /**
- * MA Browser Card  v3.8.0
+ * MA Browser Card  v3.8.1
  * A full-featured Music Assistant browser card for Home Assistant
  * GitHub: https://github.com/PMizz13/ma-browser-card
  *
@@ -702,7 +702,7 @@ class MABrowserCard extends HTMLElement {
     if(!this._maToken) return [];
     if(!await this._waitForWS()) return [];
     try {
-      const items=await this._wsSend('music/recently_played_items',{limit,media_types:['album','artist']});
+      const items=await this._wsSend('music/recently_played_items',{limit,media_types:['album','artist','playlist']});
       const seen=new Set(); return(Array.isArray(items)?items:[]).filter(i=>{const key=i.uri||i.name;if(seen.has(key))return false;seen.add(key);return true;});
     } catch(e){console.warn('[MA Card] recently_played failed:',e.message);return[];}
   }
