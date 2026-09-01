@@ -1,5 +1,8 @@
 # MA Browser Card
 
+## V 3.8.1
+Added Playlists to recently played section
+
 ## V 3.8.0
 - Added "Browse Tracks" option to long press menu on albums & Playlists
 - Added "Browse Albums" option to long press menu on Artists
