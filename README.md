@@ -53,8 +53,7 @@ The card can be fully configured using the Home Assistant UI from version 3.3.0
 
 ### Finding your `config_entry_id`
 
-Go to **Settings → Devices & Services → Music Assistant → Configure**. Look at the URL in your browser, it will contain something like
-config_entry=01JNBHFPQSJY03ANJ6XXF053W2. That string is your `config_entry_id`.
+Go to **Settings → Devices & Services → Music Assistant**. Click on the three dots next to the main Music Assistant instance and click "Copy Entry ID". This will copy your ID to the clipboard so you can just paste it into the config UI or yaml.
 
 ### Setting Your Width
 Create a grid card with 1 column (or multiple if desired) and place this card inside it. This is the easiest way to control how wide you want the card to be.
