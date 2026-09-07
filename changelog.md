@@ -1,5 +1,9 @@
 # MA Browser Card
 
+## V 3.8.2
+Fixed artist artwork looking too small next to album artwork
+Fixed configuration UI now directs users to new way to gain entity ID
+
 ## V 3.8.1
 Added Playlists to recently played section
 
