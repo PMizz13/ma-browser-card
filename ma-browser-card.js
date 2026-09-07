@@ -1,5 +1,5 @@
 /**
- * MA Browser Card  v3.8.1
+ * MA Browser Card  v3.8.2
  * A full-featured Music Assistant browser card for Home Assistant
  * GitHub: https://github.com/PMizz13/ma-browser-card
  *
@@ -15,6 +15,8 @@
  *
  *   # Required
  *   config_entry_id: 01JXXX...
+ *   #   Settings \u2192 Devices & Services \u2192 Devices \u2192 Music Assistant \u2192
+ *   #   click the \u22EE (three-dot) menu \u2192 Copy entity ID
  *   ma_url: http://192.168.1.x:8095
  *
  *   # Recommended
@@ -277,9 +279,9 @@ const CSS = `
   .a-artist { font-size:10.5px; color:var(--t3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px; }
   .a-year { font-size:10px; color:var(--t3); opacity:.7; }
   /* ARTIST GRID */
-  .artist-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(calc(var(--art-size,105px) * 0.905),1fr)); gap:13px; }
+  .artist-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(var(--art-size,105px),1fr)); gap:13px; }
   .artist-card { cursor:pointer; text-align:center; }
-  .ar-img { width:calc(var(--art-size,105px) * 0.724); height:calc(var(--art-size,105px) * 0.724); border-radius:50%; background:var(--bg2); margin:0 auto 7px; overflow:hidden; border:2px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:26px; color:var(--t3); transition:border-color .14s,transform .14s; }
+  .ar-img { width:calc(var(--art-size,105px) * 0.92); height:calc(var(--art-size,105px) * 0.92); border-radius:50%; background:var(--bg2); margin:0 auto 7px; overflow:hidden; border:2px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:26px; color:var(--t3); transition:border-color .14s,transform .14s; }
   .artist-card:hover .ar-img { border-color:var(--gold); transform:scale(1.04); }
   .ar-img img { width:100%; height:100%; object-fit:cover; }
   .ar-img svg { flex-shrink:0; }
@@ -369,7 +371,7 @@ class MABrowserCard extends HTMLElement {
   }
 
   setConfig(config) {
-    if (!config.config_entry_id) throw new Error('ma-browser-card: config_entry_id is required.\nFind it in HA \u2192 Settings \u2192 Devices & Services \u2192 Music Assistant \u2192 Configure.\nThe URL contains it: ...?config_entry=01JXXX...');
+    if (!config.config_entry_id) throw new Error('ma-browser-card: config_entry_id is required.\nFind it in HA \u2192 Settings \u2192 Devices & Services \u2192 Devices \u2192 Music Assistant \u2192 click the \u22EE (three-dot) menu \u2192 Copy entity ID.');
     if (!config.ma_url) throw new Error('ma-browser-card: ma_url is required.\nSet it to your Music Assistant URL, e.g. http://192.168.1.x:8095');
     this._config = config;
     this._maUrl = config.ma_url.replace(/\/$/, '');
@@ -1242,7 +1244,7 @@ class MABrowserCardEditor extends HTMLElement {
     const th=this._v('theme','auto'),ca=this._v('click_action','play'),st=this._v('show_title',true);
     this.shadowRoot.innerHTML='<style>'+EDITOR_CSS+'</style><div class="editor">'
       +'<div class="section-title">Required</div>'
-      +this._textField('config_entry_id','Config Entry ID *',c.config_entry_id||'','01JXXX...','Settings \u2192 Devices &amp; Services \u2192 Music Assistant \u2192 Configure \u2014 copy the ID from the URL')
+      +this._textField('config_entry_id','Config Entry ID *',c.config_entry_id||'','01JXXX...','Settings \u2192 Devices &amp; Services \u2192 Devices \u2192 Music Assistant \u2192 click the &#8942; (three-dot) menu \u2192 Copy entity ID')
       +this._textField('ma_url','MA Server URL *',c.ma_url||'','http://192.168.1.x:8095','Your Music Assistant server address including port')
       +'<div class="section-title">Recommended</div>'
       +this._pwField('ma_token','MA Access Token',c.ma_token||'','eyJ...','MA \u2192 Profile \u2192 Access Tokens \u2014 enables Recently Played &amp; Recently Added')
