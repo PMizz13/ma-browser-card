@@ -1,5 +1,15 @@
 # MA Browser Card
 
+## V 3.9.0
+New Features
+- Fully customisable colours (6 different areas to customise)
+- Customise dashboard display order
+- Customise search results order
+
+New Categories (May require further testing, please report any issues with these via the github page)
+- Audiobooks, continue where you left off
+- Podcasts, continue episode/next episode. This will display your next unplayed episode so you may have to mark previous episodes as played.
+
 ## V 3.8.2
 Fixed artist artwork looking too small next to album artwork
 Fixed configuration UI now directs users to new way to gain entity ID
