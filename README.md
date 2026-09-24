@@ -4,6 +4,8 @@ A Music Assistant browser card for Home Assistant. Browse your music library - a
   
 ![MA Browser Card screenshot](screenshot.png)
 
+<a href='https://ko-fi.com/X2H427L1M4' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://storage.ko-fi.com/cdn/kofi6.png?v=6' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
+
 # Disclaimer
  **Use at your own risk.** This is a personal project shared freely with the community. It is not affiliated with, endorsed by, or supported by Music Assistant or Nabu Casa. I make no guarantees about stability, accuracy or fitness for any particular purpose, and take no responsibility for anything that may go wrong as a result of using it. Always back up your Home Assistant configuration before installing custom components.
 
