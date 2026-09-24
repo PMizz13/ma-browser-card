@@ -24,7 +24,10 @@ A Music Assistant browser card for Home Assistant. Browse your music library - a
 - Fits to your theme
 - Party mode for queueing up tracks
 - Have your favourite playlists, albums, tracks and/or artists on the home screen
-- New queue management options. Clear the queue, add to the queue or replace it.
+- New queue management options (Clear the queue, add to the queue or replace it)
+- Fully customizable colour scheme
+- Customise dashboard order and search orders seperately
+- Audiobooks and podcasts are now in beta (If you experience any issues please report it via github)
 
 ## Requirements
 
@@ -77,16 +80,16 @@ ma_url: http://192.168.1.x:8095
 
 ### Full config
 
-```yaml
 type: custom:ma-browser-card
 config_entry_id: 01JNBHFPQSJY03ANJ6XXF053W2
 ma_url: http://192.168.1.x:8095
-ma_token: eyJ...               # Optional — enables Recently Played and Recently Addes sections
+ma_token: eyJ...               # Optional — enables Recently Played, Recently Added,
+                                # Browse, Queue view, and Up Next/Continue Listening sections
 height: 580                    # Card height in pixels (default: 580)
 players:                       # Optional — limit to specific MA players
   - media_player.kitchen_speaker    # If omitted, auto-detects all MA players
   - media_player.living_room
-theme: auto                     # auto (default, copies dashboard theme), dark, light
+theme: auto                     # auto (default, copies dashboard theme), dark, light, retro
 sidebar_position: left          # left (default) or top (horizontal nav bar)
 sidebar_width: 195              # Sidebar width in px, left sidebar only (default: 195)
 player_position: bottom         # bottom (default) or top
@@ -94,7 +97,25 @@ show_title: true                # Show/hide the logo title bar (default: true)
 title: Music                    # Logo title text (default: Music)
 subtitle: Music Assistant       # Logo subtitle text (default: Music Assistant)
 icon: mdi:music                 # Any MDI icon for the logo (default: mdi:music)
-click_action: play              # play (default) or enqueue
+
+custom_colors:                  # Optional — overrides the theme's palette (all optional)
+  accent: "#e5a00d"              # Highlights, play button, active nav, progress bar
+  background: "#111113"          # Outer card background
+  surface: "#222228"             # Sidebar, artwork placeholders, search bar, controls
+  elevated: "#2e2e38"            # Track art tiles, hover/active backgrounds
+  text: "#f0f0f5"                # Primary text
+  text_secondary: "#9898aa"      # Secondary/meta text (artist names, etc.)
+                                  # Has little effect on the retro theme, which uses fixed colours
+
+click_action: play               # play (default), enqueue, or browse
+                                  # browse: albums/playlists open their track list instead
+                                  # of playing immediately (artists already do this).
+                                  # Right-click/long-press always shows the full menu too,
+                                  # including "Browse tracks", regardless of this setting
+
+show_podcasts: false             # Optional — adds a Podcasts section to the sidebar and search
+show_audiobooks: false           # Optional — adds an Audiobooks section to the sidebar and search
+
 home_sections:                  # Set the number of items to display in each section
   radio: 3                      # Set to 0 to hide section
   recently_played: 2
@@ -104,7 +125,32 @@ home_sections:                  # Set the number of items to display in each sec
   favourite_albums: 0           # Favourited albums (default: 0 = off)
   favourite_artists: 0          # Favourited artists (default: 0 = off)
   favourite_tracks: 0           # Favourited tracks (default: 0 = off)
-```
+  continue_podcasts: 10         # Requires show_podcasts + ma_token — checks this many
+                                 # favourited podcasts for their next unfinished episode
+  continue_audiobooks: 10       # Requires show_audiobooks + ma_token
+
+home_order:                     # Optional — order sections appear in on the home screen,
+                                 # top to bottom. Omit to use the default order shown here.
+  - continue_podcasts
+  - continue_audiobooks
+  - favourite_playlists
+  - favourite_albums
+  - favourite_artists
+  - favourite_tracks
+  - radio
+  - recently_played
+  - recently_added
+  - discover
+
+search_order:                   # Optional — order sections appear in on the search
+                                 # results screen. Omit to use the default order shown here.
+  - albums
+  - artists
+  - tracks
+  - playlists
+  - podcasts
+  - audiobooks
+  - radio
 
 ### Config options
 
@@ -113,16 +159,20 @@ home_sections:                  # Set the number of items to display in each sec
 |**Functionality**     |          |         |                                                                  |
 | `config_entry_id`    | Yes      | -       | Your MA integration config entry ID                              |
 | `ma_url`             | Yes      | -       | URL of your MA server, e.g. `http://192.168.1.x:8095`            |
-| `ma_token`           | No       | -       | MA access token — enables Recently Played and Recently Added     |
+| `ma_token`           | No       | -       | MA access token — enables Recently Played, Recently Added, Browse, Queue view, and Up Next/Continue Listening sections |
 | `players`            | No       | all     | List of `media_player` entity IDs to show in the player selector |
 | `click_action`       | No       | play    | What to do when media is clicked (play, enqueue, browse)         |
+| `show_podcasts`      | No       | false   | Adds a Podcasts section to the sidebar and search                |
+| `show_audiobooks`    | No       | false   | Adds an Audiobooks section to the sidebar and search              |
 |**Layout**            |          |         |                                                                  |
 | `height`             | No       | `580`   | Card height in pixels                                            |
 | `sidebar_position`   | No       | left    | Set position of sidebar (left, top)                              |
 | `sidebar_width`      | No       | 195     | Set the sidebar width when positioned to the left in pixels      |
 | `player_position`    | No       | bottom  | Position the player to the bottom or top                         |
-| `tile_size      `    | No       | 205     | Adjusts the size of the displayed artwork tiles                  |
-| 'home_sections'      | No       |         |                                                                  |
+| `tile_size`          | No       | 105     | Adjusts the size of the displayed artwork tiles                  |
+| `home_order`         | No       | see below | List of `home_sections` keys setting the order sections appear on the home screen |
+| `search_order`       | No       | see below | List of section keys (`albums`, `artists`, `tracks`, `playlists`, `podcasts`, `audiobooks`, `radio`) setting the order sections appear in on search results |
+| `home_sections`      | No       |         |                                                                  |
 | `radio`              | No       | 50      | Set number of saved radio stations to display                    |
 | `recently_played`    | No       | 20      | Set number of recently played albums to display                  |
 | `recently_added`     | No       | 20      | Set number of recently added music to display                    |
@@ -131,11 +181,21 @@ home_sections:                  # Set the number of items to display in each sec
 | `favourite_albums`   | No       | 0       | Set number of favourite albums to display                        |
 | `favourite_artists`  | No       | 0       | Set number of favourite artists to display                       |
 | `favourite_tracks`   | No       | 0       | Set number of favourite tracks to display                        |
+| `continue_podcasts`  | No       | 10      | Requires `show_podcasts` + `ma_token`. Checks this many favourited podcasts for their next unfinished episode |
+| `continue_audiobooks`| No       | 10      | Requires `show_audiobooks` + `ma_token`. Number of in-progress audiobooks to show |
 | **Appearance**       |          |         |                                                                  |
 | `title`              | No       | Music   | Text for title card                                              |
 | `subtitle`           | No       | Music Assistant | Subtitle for card                                        |
 | `icon`               | No       | mdi:music | Icon for card (any mdi)                                        |
 | `theme`              | No       | auto    | Theme for card, (dark, light, retro, auto (use Home Assistant theme))   |
+| `custom_colors`      | No       | -       | Overrides the theme's palette (see below). Has little effect on the retro theme, which uses fixed colours |
+| `custom_colors.accent`| No      | `#e5a00d` | Highlights, play button, active nav, progress bar              |
+| `custom_colors.background`| No  | `#111113` | Outer card background                                           |
+| `custom_colors.surface`| No     | `#222228` | Sidebar, artwork placeholders, search bar, controls             |
+| `custom_colors.elevated`| No    | `#2e2e38` | Track art tiles, hover/active backgrounds                       |
+| `custom_colors.text` | No       | `#f0f0f5` | Primary text                                                     |
+| `custom_colors.text_secondary`| No | `#9898aa` | Secondary/meta text (artist names, etc.)                    |
+
 ## Usage
 
 ### Browsing
