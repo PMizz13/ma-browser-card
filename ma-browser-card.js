@@ -1,5 +1,5 @@
 /**
- * MA Browser Card  v3.9.0
+ * MA Browser Card  v3.9.1
  * A full-featured Music Assistant browser card for Home Assistant
  * GitHub: https://github.com/PMizz13/ma-browser-card
  *
@@ -41,7 +41,9 @@
  *     surface: "#222228"           #   sidebar, artwork placeholders, controls
  *     elevated: "#2e2e38"          #   hover/active backgrounds
  *     text: "#f0f0f5"              #   primary text
- *     text_secondary: "#9898aa"    #   secondary/meta text
+ *     text_nav: "#9898aa"    #   nav button colours
+ *     other_text: "#55555f"        # other/tertiary text
+ *     border: "#ffffff12"          # borders and dividers
  *
  *   # Behaviour
  *   click_action: play              # play | enqueue | browse
@@ -471,12 +473,10 @@ class MABrowserCard extends HTMLElement {
     const cc = this._config.custom_colors;
     let colorVarsStyle = '';
     if (cc) {
-      const varMap = { accent: '--gold', background: '--bg0', surface: '--bg2', elevated: '--bg3', text: '--t1', text_secondary: '--t2' };
+      const varMap = { accent: '--gold', background: '--bg0', surface: '--bg2', elevated: '--bg3', text: '--t1', text_nav: '--t2', other_text: '--t3', border: '--border' };
       const parts = [];
       Object.keys(varMap).forEach(key => { if (cc[key]) parts.push(`${varMap[key]}:${cc[key]}`); });
-      // The sidebar and player bar use their own theme variables (distinct from
-      // --bg2) so that themes can give them a different shade — tie them to the
-      // Surface colour too, or custom colours would leave them unchanged.
+
       if (cc.surface) {
         parts.push(`--bg-sidebar:${cc.surface}`);
         parts.push(`--bg-player:${cc.surface}`);
@@ -1440,7 +1440,7 @@ const EDITOR_CSS = `
   .order-btn:disabled{opacity:.3;cursor:default;}
 `;
 
-const DEFAULT_CUSTOM_COLORS = { accent:'#e5a00d', background:'#111113', surface:'#222228', elevated:'#2e2e38', text:'#f0f0f5', text_secondary:'#9898aa' };
+const DEFAULT_CUSTOM_COLORS = { accent:'#e5a00d', background:'#111113', surface:'#222228', elevated:'#2e2e38', text:'#f0f0f5', text_nav:'#9898aa', other_text:'#55555f', border:'#ffffff12' };
 
 class MABrowserCardEditor extends HTMLElement {
   constructor(){super();this.attachShadow({mode:'open'});this._config={};this._pendingTimer=null;}
@@ -1480,7 +1480,7 @@ class MABrowserCardEditor extends HTMLElement {
       +this._textField('title','Title text',c.title||'','Music','')
       +this._textField('subtitle','Subtitle text',c.subtitle||'','Music Assistant','')
       +this._textField('icon','Icon',c.icon||'','mdi:music','Any MDI icon e.g. mdi:speaker, mdi:headphones, mdi:radio')
-      +'<div class="section-title">Custom Colors</div>'
+      +'<div class="section-title">Custom Colours</div>'
       +'<div class="toggle-row"><div><div class="toggle-label">Override theme colours</div><div class="toggle-hint">Set your own palette instead of the theme above. Has little effect on the Retro theme, which uses fixed colours.</div></div><label class="toggle-switch"><input type="checkbox" id="colors_enabled"'+(colorsEnabled?' checked':'')+' /><span class="toggle-track"></span></label></div>'
       +'<div id="colorFields" style="'+(colorsEnabled?'':'display:none')+'">'
       +this._colorField('accent','Accent',ccVals.accent,'Highlights, play button, active nav, progress bar')
@@ -1488,7 +1488,9 @@ class MABrowserCardEditor extends HTMLElement {
       +this._colorField('surface','Surface',ccVals.surface,'Sidebar, artwork placeholders, search bar, controls')
       +this._colorField('elevated','Elevated surface',ccVals.elevated,'Track art tiles, hover/active backgrounds')
       +this._colorField('text','Primary text',ccVals.text,'Titles and main text')
-      +this._colorField('text_secondary','Secondary text',ccVals.text_secondary,'Artist names and meta text')
+      +this._colorField('text_nav','Nav text',ccVals.text_nav,'Nav button text')
+      +this._colorField('other_text','Other text',ccVals.other_text,'Other/tertiary text')
+      +this._colorField('border','Border',ccVals.border,'Borders and dividers')
       +'</div>'
       +'<div class="section-title">Behaviour</div>'
       +'<div class="field-row"><label>Single click action</label><select id="click_action"><option value="play"'+(ca==='play'?' selected':'')+'>Play immediately (default)</option><option value="enqueue"'+(ca==='enqueue'?' selected':'')+'>Add to queue</option><option value="browse"'+(ca==='browse'?' selected':'')+'>Browse (show tracks)</option></select><div class="hint">Browse opens an album or playlist\u2019s track list instead of playing it (artists already open their albums this way). Requires an MA access token. Also available any time via right-click / long-press \u2192 "Browse tracks", regardless of this setting</div></div>'
