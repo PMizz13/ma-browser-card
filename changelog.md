@@ -1,5 +1,8 @@
 # MA Browser Card
 
+## V 3.9.1
+Fixed - Not all sections were accounted for when assigning custom colours
+
 ## V 3.9.0
 New Features
 - Fully customisable colours (6 different areas to customise)
