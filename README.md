@@ -106,8 +106,10 @@ custom_colors:                  # Optional — overrides the theme's palette (al
   surface: "#222228"             # Sidebar, artwork placeholders, search bar, controls
   elevated: "#2e2e38"            # Track art tiles, hover/active backgrounds
   text: "#f0f0f5"                # Primary text
-  text_secondary: "#9898aa"      # Secondary/meta text (artist names, etc.)
-                                  # Has little effect on the retro theme, which uses fixed colours
+  text_nav: "#9898aa"            # nav button colours
+  other_text: "#55555f"          # other/tertiary text
+  border: "#ffffff12"            # borders and dividers
+
 
 click_action: play               # play (default), enqueue, or browse
                                   # browse: albums/playlists open their track list instead
@@ -154,6 +156,17 @@ search_order:                   # Optional — order sections appear in on the s
   - audiobooks
   - radio
 
+custom_colors:     #Optional - override the theme colours
+  accent: '#e5a00d'
+  background: '#111113'
+  surface: '#222228'
+  elevated: '#2e2e38'
+  text: '#f0f0f5'
+  text_nav: '#9898aa'
+  other_text: '#55555f'
+  border: '#ffffff12'
+
+
 ### Config options
 
 | Option               | Required | Default | Description                                                      |
@@ -196,7 +209,9 @@ search_order:                   # Optional — order sections appear in on the s
 | `custom_colors.surface`| No     | `#222228` | Sidebar, artwork placeholders, search bar, controls             |
 | `custom_colors.elevated`| No    | `#2e2e38` | Track art tiles, hover/active backgrounds                       |
 | `custom_colors.text` | No       | `#f0f0f5` | Primary text                                                     |
-| `custom_colors.text_secondary`| No | `#9898aa` | Secondary/meta text (artist names, etc.)                    |
+| `custom_colors.text_nav`| No | `#9898aa` | Nav button text                 |
+| `custom_colors.other_text`| No | `#55555f` | Secondary/meta text (artist names, etc.)                    |
+| `custom_colors.border`| No | `#ffffff12` | Box and card borders                |
 
 ## Usage
 
