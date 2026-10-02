@@ -1,5 +1,5 @@
 /**
- * MA Browser Card  v3.9.1
+ * MA Browser Card  v3.9.1-ingress.1
  * A full-featured Music Assistant browser card for Home Assistant
  * GitHub: https://github.com/PMizz13/ma-browser-card
  *
@@ -15,9 +15,10 @@
  *
  *   # Required
  *   config_entry_id: 01JXXX...
- *   #   Settings \u2192 Devices & Services \u2192 Devices \u2192 Music Assistant \u2192
- *   #   click the \u22EE (three-dot) menu \u2192 Copy entity ID
+ *   #   Settings \u2192 Devices & Services \u2192 Music Assistant integration \u2192
+ *   #   click the \u22EE (three-dot) menu \u2192 Copy entry ID
  *   ma_url: http://192.168.1.x:8095
+ *   ma_addon_slug: d5369777_music_assistant  # optional: route via HA ingress
  *
  *   # Recommended
  *   ma_token: eyJ...                # enables Recently Played / Recently Added
@@ -433,11 +434,18 @@ class MABrowserCard extends HTMLElement {
   }
 
   setConfig(config) {
-    if (!config.config_entry_id) throw new Error('ma-browser-card: config_entry_id is required.\nFind it in HA \u2192 Settings \u2192 Devices & Services \u2192 Devices \u2192 Music Assistant \u2192 click the \u22EE (three-dot) menu \u2192 Copy entity ID.');
-    if (!config.ma_url) throw new Error('ma-browser-card: ma_url is required.\nSet it to your Music Assistant URL, e.g. http://192.168.1.x:8095');
+    if (!config.config_entry_id) throw new Error('ma-browser-card: config_entry_id is required.\nFind it in HA \u2192 Settings \u2192 Devices & Services \u2192 Music Assistant integration \u2192 three-dot menu \u2192 Copy entry ID.');
+    if (!config.ma_url && !config.ma_addon_slug) throw new Error('ma-browser-card: set ma_addon_slug for ingress, or ma_url for a direct connection.');
+    if (config.ma_addon_slug && !/^[a-zA-Z0-9_-]+$/.test(config.ma_addon_slug)) {
+      throw new Error('ma-browser-card: ma_addon_slug must be an add-on slug, not a URL.');
+    }
+    this._stopMA();
     this._config = config;
-    this._maUrl = config.ma_url.replace(/\/$/, '');
-    this._maToken = config.ma_token || '';
+    this._directMaUrl = (config.ma_url || '').replace(/\/$/, '');
+    this._maUrl = config.ma_addon_slug ? '' : this._directMaUrl;
+    this._maToken = (config.ma_token || '').trim();
+    this._imgCache = {}; this._libCache = {};
+    if (this._built && this.isConnected) this._init();
   }
 
   set hass(hass) {
@@ -593,12 +601,15 @@ class MABrowserCard extends HTMLElement {
   }
 
   async _init() {
+    const generation = this._maGeneration;
     try {
+      await this._prepareMA();
+      if (!this.isConnected || generation !== this._maGeneration) return;
       this._loadPlayers(); this._connectMA();
-      await this._renderHome(); this._startPoll();
-      setTimeout(() => { if (this._players.length === 0) this._loadPlayers(); }, 3000);
-      setTimeout(async () => { if (this._wsReady && this._view === 'home') await this._renderHome(); }, 4000);
-    } catch(e) { this._err(e); }
+      await this._renderHome();
+      if (!this.isConnected || generation !== this._maGeneration) return;
+      this._startPoll();
+    } catch(e) { if (this.isConnected && generation === this._maGeneration) this._err(e); }
   }
 
   _$ = id => this.shadowRoot.getElementById(id);
@@ -606,13 +617,13 @@ class MABrowserCard extends HTMLElement {
   _skeleton(count=8) { return `<div class="section"><div class="skeleton-grid">${Array.from({length:count},()=>`<div class="skel-card"><div class="skel-art"></div><div class="skel-line"></div><div class="skel-line short"></div></div>`).join('')}</div></div>`; }
   _loading() { if (this._imgObserver) this._imgObserver.disconnect(); this._scroll().innerHTML = this._skeleton(); }
   _err(e, retryFn) {
-    const msg = e?.message||String(e);
+    const msg = this._esc(e?.message||String(e));
     this._scroll().innerHTML = `<div class="state-box"><div>&#x26A0;</div><div class="err-txt">${msg}</div>${retryFn?`<button class="retry-btn" id="retryBtn">Try again</button>`:''}</div>`;
     if (retryFn) { const btn=this._scroll().querySelector('#retryBtn'); if(btn) btn.addEventListener('click',retryFn); }
   }
   _esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   _fmtDur(sec) { if(!sec) return''; return `${Math.floor(sec/60)}:${String(Math.floor(sec%60)).padStart(2,'0')}`; }
-  _artUrl(item) { if(!item) return null; return item.image||item.image_url||item.album?.image||item.album?.image_url||null; }
+  _artUrl(item) { if(!item) return null; return this._imageUrl(item.image||item.image_url||item.album?.image||item.album?.image_url); }
   _artistName(item) { return item?.artists?.length ? item.artists.map(a=>a.name).join(', ') : ''; }
 
   // ── Placeholders ─────────────────────────────────────────────
@@ -653,6 +664,7 @@ class MABrowserCard extends HTMLElement {
     el.innerHTML = `<svg width="100%" height="100%" style="display:block;position:absolute;inset:0;object-fit:cover;" preserveAspectRatio="xMidYMax meet" viewBox="0 0 240 240" fill="none" xmlns="http://www.w3.org/2000/svg"> <path d="M109.394 4.3814C115.242 -1.46047 124.788 -1.46047 130.606 4.3814L229.394 103.269C235.242 109.111 240 120.643 240 128.907V219.017L239.995 219.373C239.789 227.459 233.114 234.001 225 234.001H15C6.75759 234.001 2.40473e-05 227.22 0 218.987V128.877C0.000120331 120.613 4.78834 109.081 10.6064 103.239L109.394 4.3814Z" fill="#F2F4F9"/> <path d="M109.394 4.3814C115.242 -1.46047 124.788 -1.46047 130.606 4.3814L229.394 103.269C235.242 109.111 240 120.643 240 128.907V219.017L239.995 219.373C239.789 227.459 233.114 234.001 225 234.001H15C6.75759 234.001 2.40473e-05 227.22 0 218.987V128.877C0.000120331 120.613 4.78834 109.081 10.6064 103.239L109.394 4.3814ZM36 120.001C31.5817 120.001 28 123.582 28 128.001V206.001H44V128.001C44 123.582 40.4183 120.001 36 120.001ZM68 120.001C63.5817 120.001 60 123.582 60 128.001V206.001H76V128.001C76 123.582 72.4183 120.001 68 120.001ZM100 120.001C95.5817 120.001 92 123.582 92 128.001V206.001H108V128.001C108 123.582 104.418 120.001 100 120.001ZM158.393 120.427C154.2 119.032 149.671 121.3 148.275 125.492L121.479 206.001H138.342L163.456 130.544C164.851 126.352 162.584 121.823 158.393 120.427ZM188.708 125.492C187.313 121.3 182.783 119.032 178.591 120.427C174.399 121.823 172.131 126.352 173.526 130.544L198.642 206.001H215.504L188.708 125.492Z" fill="#18BCF2"/> </svg>`;  }
 
   async _loadImgInto(url, el, ph, maLogoType = null) {
+    url = this._imageUrl(url);
     if (!url) {
       if (maLogoType) this._loadMaLogo(el, maLogoType); else el.innerHTML = ph;
       return;
@@ -765,32 +777,161 @@ class MABrowserCard extends HTMLElement {
     });
     return this._wsReady;
   }
+  // Resolve the add-on route using the same authenticated Supervisor API as HA.
+  // Never fall back to the LAN URL when ingress fails.
+  async _prepareMA() {
+    if (!this._config.ma_addon_slug) {
+      const url = new URL(this._directMaUrl, location.origin);
+      if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) {
+        throw new Error('MA Server URL must be an HTTP(S) address without credentials.');
+      }
+      if (location.protocol === 'https:' && url.protocol !== 'https:') {
+        throw new Error('Use ma_addon_slug for the MA add-on, or an HTTPS MA Server URL. Direct HTTP from an HTTPS dashboard is blocked.');
+      }
+      this._maUrl = url.href.replace(/\/$/, '');
+      return;
+    }
+    const generation = this._maGeneration;
+    const info = await this._supervisor(`/addons/${this._config.ma_addon_slug}/info`);
+    if (generation !== this._maGeneration) throw new Error('MA configuration changed; reconnecting.');
+    if (!info.ingress || !info.ingress_entry || info.state !== 'started') {
+      throw new Error('Music Assistant add-on must be running with ingress enabled. Check ma_addon_slug.');
+    }
+    const url = new URL(info.ingress_entry, location.origin);
+    if (url.origin !== location.origin || !/^\/api\/hassio_ingress\/[^/]+\/?$/.test(url.pathname)
+        || url.search || url.hash || url.username || url.password) {
+      throw new Error('Supervisor returned an unexpected ingress URL.');
+    }
+    await this._ensureIngressSession();
+    if (generation !== this._maGeneration) throw new Error('MA configuration changed; reconnecting.');
+    this._maUrl = url.href.replace(/\/$/, '');
+    clearInterval(this._ingressTimer);
+    this._ingressTimer = setInterval(() => {
+      this._ensureIngressSession().catch(() => {
+        this._stopMA();
+        this._err(new Error('Music Assistant ingress session could not be renewed. Reload the dashboard to reconnect.'));
+      });
+    }, 5 * 60 * 1000);
+  }
+  _supervisor(endpoint, method = 'get', data) {
+    return this._hass.callWS({type: 'supervisor/api', endpoint, method, ...(data ? {data} : {})});
+  }
+  async _ensureIngressSession() {
+    // HA scopes this cookie to /api/hassio_ingress/, so it cannot be read
+    // from a dashboard. Keep our session in memory and renew it like HA does.
+    let session = this._ingressSession;
+    if (session) {
+      try { await this._supervisor('/ingress/validate_session', 'post', {session}); }
+      catch (_) { session = null; }
+    }
+    if (!session) session = (await this._supervisor('/ingress/session', 'post')).session;
+    if (!session || !/^[a-zA-Z0-9_-]+$/.test(session)) {
+      throw new Error('Unable to create a Music Assistant ingress session.');
+    }
+    this._ingressSession = session;
+    document.cookie = `ingress_session=${session};path=/api/hassio_ingress/;SameSite=Strict${location.protocol === 'https:' ? ';Secure' : ''}`;
+  }
+  _imageUrl(value) {
+    if (!value || typeof value !== 'string') return null;
+    try {
+      const url = new URL(value, location.origin);
+      if (!['http:', 'https:'].includes(url.protocol)) return null;
+      if (this._config.ma_addon_slug && this._maUrl) {
+        // MA service responses can contain LAN URLs even when the socket uses ingress.
+        const direct = this._directMaUrl ? new URL(this._directMaUrl, location.origin) : null;
+        if ((direct && url.origin === direct.origin) || /^\/imageproxy(?:\/|$)/.test(url.pathname)) {
+          return this._maUrl + url.pathname + url.search;
+        }
+        // Let MA fetch insecure external artwork server-side, never the browser.
+        if (url.protocol === 'http:' && location.protocol === 'https:') {
+          return `${this._maUrl}/imageproxy?path=${encodeURIComponent(url.href)}&provider=url&size=256&fmt=jpeg`;
+        }
+      }
+      if (location.protocol === 'https:' && url.protocol !== 'https:') return null;
+      return url.href;
+    } catch (_) { return null; }
+  }
+  _stopMA() {
+    this._maGeneration = (this._maGeneration || 0) + 1;
+    clearTimeout(this._wsRetryTimer); clearTimeout(this._wsAuthTimer);
+    clearInterval(this._ingressTimer);
+    if (this._ws) { this._ws.onclose = null; this._ws.close(); this._ws = null; }
+    this._wsReady = false;
+    this._rejectPendingMA('MA connection closed');
+  }
+  _rejectPendingMA(message) {
+    for (const pending of Object.values(this._wsPending)) {
+      clearTimeout(pending.timer); pending.reject(new Error(message));
+    }
+    this._wsPending = {};
+  }
   _connectMA() {
-    if(!this._maToken||!this._maUrl) return;
-    if(this._ws){this._ws.close();this._ws=null;}
-    const wsUrl=this._maUrl.replace('http://','ws://').replace('https://','wss://')+'/ws';
-    const ws=new WebSocket(wsUrl); this._ws=ws; this._wsReady=false; this._wsGreeted=false;
-    ws.onmessage=e=>{
-      const msg=JSON.parse(e.data);
-      if(!this._wsGreeted){this._wsGreeted=true;console.debug('[MA Card] MA WS first message:',msg);}
-      if(msg.server_version&&!msg.message_id){ws.send(JSON.stringify({message_id:'auth',command:'auth',args:{token:this._maToken}}));return;}
-      if(msg.message_id==='auth'){
-        if(msg.result?.authenticated){this._wsReady=true;}
-        else{console.error('[MA Card] MA WS auth did not succeed \u2014 full response:',msg);}
+    if (!this._maToken || !this._maUrl || !this.isConnected || this._ws) return;
+    const url = new URL(this._maUrl + '/ws');
+    if (location.protocol === 'https:' && url.protocol !== 'https:') return;
+    url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(url.href);
+    this._ws = ws; this._wsReady = false;
+    this._wsAuthTimer = setTimeout(() => ws.close(), 15000);
+    ws.onmessage = e => {
+      if (this._ws !== ws) return;
+      let msg;
+      try { msg = JSON.parse(e.data); } catch (_) { return; }
+      if (msg.server_version && !msg.message_id) {
+        ws.send(JSON.stringify({message_id: 'auth', command: 'auth', args: {token: this._maToken}}));
         return;
       }
-      const pending=this._wsPending[msg.message_id];
-      if(pending){delete this._wsPending[msg.message_id];msg.error_code?pending.reject(new Error(msg.details||'MA error '+msg.error_code)):pending.resolve(msg.result);}
+      if (msg.message_id === 'auth') {
+        clearTimeout(this._wsAuthTimer);
+        if (msg.result?.authenticated) {
+          this._wsReady = true;
+          // Refresh whenever auth completes, including slow starts and reconnects.
+          if (this._view === 'home') this._renderHome();
+        } else {
+          this._stopMA();
+          this._err(new Error('Music Assistant rejected the access token. Check ma_token.'));
+        }
+        return;
+      }
+      const pending = this._wsPending[msg.message_id];
+      if (pending) {
+        if (msg.error_code) {
+          delete this._wsPending[msg.message_id]; clearTimeout(pending.timer);
+          pending.reject(new Error(msg.details || 'MA error ' + msg.error_code));
+        } else if (msg.partial || pending.parts) {
+          pending.parts = (pending.parts || []).concat(msg.result || []);
+          if (!msg.partial) {
+            delete this._wsPending[msg.message_id]; clearTimeout(pending.timer);
+            pending.resolve(pending.parts);
+          }
+        } else {
+          delete this._wsPending[msg.message_id]; clearTimeout(pending.timer);
+          pending.resolve(msg.result);
+        }
+      }
     };
-    ws.onerror=()=>{this._wsReady=false;};
-    ws.onclose=()=>{this._wsReady=false;setTimeout(()=>{if(this._maToken)this._connectMA();},10000);};
+    ws.onerror = () => { if (this._ws === ws) this._wsReady = false; };
+    ws.onclose = () => {
+      if (this._ws !== ws) return;
+      this._ws = null; this._wsReady = false;
+      clearTimeout(this._wsAuthTimer); this._rejectPendingMA('MA connection lost');
+      this._wsRetryTimer = setTimeout(async () => {
+        if (!this.isConnected) return;
+        try { await this._prepareMA(); this._connectMA(); }
+        catch (_) { this._err(new Error('Music Assistant connection failed. Check the add-on and reload the dashboard.')); }
+      }, 10000);
+    };
   }
-  _wsSend(command,args={}) {
-    return new Promise((resolve,reject)=>{
-      if(!this._ws||!this._wsReady){reject(new Error('MA WS not ready'));return;}
-      const id=String(++this._wsMsgId); this._wsPending[id]={resolve,reject};
-      this._ws.send(JSON.stringify({message_id:id,command,args}));
-      setTimeout(()=>{if(this._wsPending[id]){delete this._wsPending[id];reject(new Error('MA WS timeout'));}},10000);
+  _wsSend(command, args = {}) {
+    return new Promise((resolve, reject) => {
+      if (!this._ws || !this._wsReady) { reject(new Error('MA WS not ready')); return; }
+      const id = String(++this._wsMsgId);
+      const timer = setTimeout(() => {
+        delete this._wsPending[id]; reject(new Error('MA WS timeout'));
+      }, 10000);
+      this._wsPending[id] = {resolve, reject, timer};
+      try { this._ws.send(JSON.stringify({message_id: id, command, args})); }
+      catch (e) { delete this._wsPending[id]; clearTimeout(timer); reject(e); }
     });
   }
   async _fetchRecentlyAdded(limit=20) {
@@ -1069,7 +1210,7 @@ class MABrowserCard extends HTMLElement {
   }
 
   _maItemArtUrl(item) {
-    if(typeof item.image==='string'&&item.image) return item.image;
+    if(typeof item.image==='string'&&item.image) return this._imageUrl(item.image);
     if(item.image?.proxy_id) return `${this._maUrl}/imageproxy/${item.image.proxy_id}`;
     if(item.image?.path) return `${this._maUrl}/imageproxy?path=${encodeURIComponent(item.image.path)}&provider=${encodeURIComponent(item.image.provider||'')}&size=256&fmt=jpeg`;
     if(item.metadata?.images?.[0]?.proxy_id) return `${this._maUrl}/imageproxy/${item.metadata.images[0].proxy_id}`;
@@ -1263,14 +1404,14 @@ class MABrowserCard extends HTMLElement {
     const card=this.shadowRoot.querySelector('.card'); const panel=document.createElement('div');
     panel.className='queue-panel'; panel.id='queuePanel';
     const state=this._hass.states[this._selectedPlayer];
-    const artPath=state?.attributes.entity_picture_local||state?.attributes.entity_picture||null;
+    const artPath=this._imageUrl(state?.attributes.entity_picture_local||state?.attributes.entity_picture);
     const title=state?.attributes.media_title||'Queue',artist=state?.attributes.media_artist||'';
     const queueArtStyle = artPath ? `background-image:url("${artPath}");background-size:cover;background-position:center;` : '';
     const queueArtContent = artPath ? '' : '&#9834;&#xFE0E;';
     panel.innerHTML=`<div class="queue-header"><div class="queue-art" style="${queueArtStyle}">${queueArtContent}</div><div class="queue-title-wrap"><div class="queue-title" id="qTitle">${this._esc(title)}</div><div class="queue-subtitle" id="qSub">${this._esc(artist)}</div></div><button class="queue-close" id="qClose">&#x2715;&#xFE0E;</button></div><div class="queue-scroll" id="qScroll"><div class="state-box"><div class="spinner"></div></div></div>`;
     card.appendChild(panel); panel.querySelector('#qClose').addEventListener('click',()=>this._hideQueue());
     try {
-      if(!await this._waitForWS()) throw new Error('Queue view needs the MA access token (ma_token) configured, and your browser must be able to reach the MA server directly.');
+      if(!await this._waitForWS()) throw new Error('Queue view needs the MA access token (ma_token) configured, and a working MA connection (ingress or HTTPS).');
       const queueId=this._hass.states[this._selectedPlayer]?.attributes?.active_queue;
       if(!queueId) throw new Error('No active queue found');
       const queueState=await this._wsSend('player_queues/get',{queue_id:queueId});
@@ -1314,6 +1455,7 @@ class MABrowserCard extends HTMLElement {
     return `rgb(220,${Math.round(100-100*(pct-75)/25)},0)`;
   }
   _startPoll() {
+    clearInterval(this._pollTimer); clearInterval(this._progressTimer);
     this._updateNowPlaying();
     this._pollTimer=setInterval(()=>this._updateNowPlaying(),2000);
     this._progressTimer=setInterval(()=>this._tickProgress(),500);
@@ -1340,7 +1482,7 @@ class MABrowserCard extends HTMLElement {
     repeatBtn.title=`Repeat: ${repeat}`;
     this._$('npTitle').textContent=state.attributes.media_title||'Nothing playing';
     this._$('npArtist').textContent=state.attributes.media_artist||'\u2014';
-    const artPath=state.attributes.entity_picture_local||state.attributes.entity_picture||null;
+    const artPath=this._imageUrl(state.attributes.entity_picture_local||state.attributes.entity_picture);
     const artEl=this._$('npArt');
     if(artPath){
       if(artEl.dataset.src!==artPath){
@@ -1363,7 +1505,14 @@ class MABrowserCard extends HTMLElement {
     const contentId=state.attributes.media_content_id||'';
     if(contentId!==this._nowPlayingUri){this._nowPlayingUri=contentId;this._highlightNowPlaying();}
   }
+  connectedCallback() {
+    if (this._built && this._hass) {
+      document.addEventListener('click', this._boundDismissCtx);
+      this._init();
+    }
+  }
   disconnectedCallback() {
+    this._stopMA();
     clearInterval(this._pollTimer);clearInterval(this._progressTimer);clearTimeout(this._searchTimer);
     if(this._imgObserver){this._imgObserver.disconnect();this._imgObserver=null;}
     if(this._ws){this._ws.onclose=null;this._ws.close();this._ws=null;}
@@ -1464,8 +1613,9 @@ class MABrowserCardEditor extends HTMLElement {
     const ccVals={...DEFAULT_CUSTOM_COLORS,...(c.custom_colors||{})};
     this.shadowRoot.innerHTML='<style>'+EDITOR_CSS+'</style><div class="editor">'
       +'<div class="section-title">Required</div>'
-      +this._textField('config_entry_id','Config Entry ID *',c.config_entry_id||'','01JXXX...','Settings \u2192 Devices &amp; Services \u2192 Devices \u2192 Music Assistant \u2192 click the &#8942; (three-dot) menu \u2192 Copy entity ID')
-      +this._textField('ma_url','MA Server URL *',c.ma_url||'','http://192.168.1.x:8095','Your Music Assistant server address including port')
+      +this._textField('config_entry_id','Config Entry ID *',c.config_entry_id||'','01JXXX...','Settings \u2192 Devices &amp; Services \u2192 Music Assistant integration \u2192 three-dot menu \u2192 Copy entry ID')
+      +this._textField('ma_addon_slug','MA add-on slug (secure ingress)',c.ma_addon_slug||'','d5369777_music_assistant','Routes MA data and artwork through Home Assistant; requires the MA add-on')
+      +this._textField('ma_url','MA Server URL',c.ma_url||'','http://192.168.1.x:8095','Original MA address including port; optional with ingress, useful for rewriting artwork URLs')
       +'<div class="section-title">Recommended</div>'
       +this._pwField('ma_token','MA Access Token',c.ma_token||'','eyJ...','MA \u2192 Profile \u2192 Access Tokens \u2014 enables Recently Played &amp; Recently Added')
       +'<div class="section-title">Layout</div>'
@@ -1548,7 +1698,7 @@ class MABrowserCardEditor extends HTMLElement {
     sr.addEventListener('pointerdown',e=>e.stopPropagation());
     sr.addEventListener('mousedown',e=>e.stopPropagation());
     sr.addEventListener('touchstart',e=>e.stopPropagation(),{passive:true});
-    ['config_entry_id','ma_url','title','subtitle','icon'].forEach(id=>{const el=sr.getElementById(id);if(el)el.addEventListener('change',()=>self._set(id,el.value.trim()||undefined));});
+    ['config_entry_id','ma_url','ma_addon_slug','title','subtitle','icon'].forEach(id=>{const el=sr.getElementById(id);if(el)el.addEventListener('change',()=>self._set(id,el.value.trim()||undefined));});
     const tokenEl=sr.getElementById('ma_token');if(tokenEl)tokenEl.addEventListener('change',()=>self._set('ma_token',tokenEl.value.trim()||undefined));
     const playersEl=sr.getElementById('players');if(playersEl)playersEl.addEventListener('change',()=>{const val=playersEl.value.trim();self._set('players',val?val.split(',').map(s=>s.trim()).filter(Boolean):undefined);});
     ['sidebar_position','player_position','theme','click_action'].forEach(id=>{const el=sr.getElementById(id);if(el)el.addEventListener('change',()=>self._set(id,el.value));});

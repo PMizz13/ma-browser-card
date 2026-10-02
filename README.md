@@ -65,7 +65,7 @@ Create a grid card with 1 column (or multiple if desired) and place this card in
 
 ### Getting an MA access token (optional)
 
-The `ma_token` is only needed for the **Recently Played** section on the home screen. Without it everything else works fine.
+The `ma_token` enables Recently Played, Recently Added, Browse, Queue view, and the Up Next/Continue Listening sections. Basic library browsing and playback through the Home Assistant integration remain available without it. Ingress mode still uses this token for the MA API.
 
 1. Open the Music Assistant UI
 2. Click the profile icon (top right)
@@ -79,6 +79,39 @@ type: custom:ma-browser-card
 config_entry_id: 01JNBHFPQSJY03ANJ6XXF053W2
 ma_url: http://192.168.1.x:8095
 ```
+
+### Secure access through Home Assistant ingress
+
+For Music Assistant installed as a Home Assistant add-on/app, set
+`ma_addon_slug` to route the MA WebSocket and artwork through Home Assistant's
+existing ingress connection. When the dashboard uses HTTPS (including Nabu Casa),
+these requests use HTTPS/WSS on the same Home Assistant origin. No additional
+reverse proxy or certificate is needed.
+
+```yaml
+type: custom:ma-browser-card
+config_entry_id: YOUR_MA_INTEGRATION_ENTRY_ID
+ma_addon_slug: d5369777_music_assistant  # Verify your own installed add-on slug
+ma_url: http://192.168.1.100:8095        # Optional in ingress mode; see below
+ma_token: YOUR_MA_ACCESS_TOKEN
+```
+
+Find the add-on slug in the URL of its Home Assistant settings page. It is distinct
+from the Music Assistant integration's `config_entry_id`. The add-on must be
+running and the current HA user must have permission to access its Web UI.
+
+In ingress mode, `ma_url` is only used to recognize artwork URLs returned with the
+original server address, so retaining it is useful. The browser does not connect
+to that address. The card obtains the ingress path and session from Home Assistant,
+renews the session periodically, and uses that path for MA data and artwork.
+Failed ingress connections never fall back to a direct LAN connection.
+
+This option requires HA's Supervisor and an ingress-enabled MA add-on; it does
+not add ingress support to a standalone MA Docker installation. For direct
+connections from an HTTPS dashboard, use an MA URL that already supports HTTPS.
+Changing `http` to `https` in YAML alone does not enable TLS on the MA server.
+Direct HTTP from an HTTPS dashboard is rejected with a configuration message;
+direct HTTP remains supported when the dashboard itself uses HTTP.
 
 ### Full config
 
@@ -173,7 +206,8 @@ custom_colors:     #Optional - override the theme colours
 | -------------------- | -------- | ------- | ---------------------------------------------------------------- |
 |**Functionality**     |          |         |                                                                  |
 | `config_entry_id`    | Yes      | -       | Your MA integration config entry ID                              |
-| `ma_url`             | Yes      | -       | URL of your MA server, e.g. `http://192.168.1.x:8095`            |
+| `ma_url`             | Unless using ingress | - | MA server URL. Direct access from an HTTPS dashboard requires HTTPS; optional original address for artwork rewriting in ingress mode. |
+| `ma_addon_slug`      | No | - | Installed MA add-on slug. Enables data and artwork access through Home Assistant ingress. |
 | `ma_token`           | No       | -       | MA access token — enables Recently Played, Recently Added, Browse, Queue view, and Up Next/Continue Listening sections |
 | `players`            | No       | all     | List of `media_player` entity IDs to show in the player selector |
 | `click_action`       | No       | play    | What to do when media is clicked (play, enqueue, browse)         |
@@ -235,7 +269,7 @@ Use the dropdown in the sidebar to switch between MA players. The volume slider 
 
 - The `ma_token` is stored in plaintext in your Lovelace config. Treat it like a password — don't share your dashboard YAML publicly if it contains your token.
 - Library browsing loads up to 500 items per section for performance. Search covers your full library regardless of this limit.
-- The card uses a WebSocket connection directly to your MA server for Recently Played, Recently added and the queue view. This requires `ma_url` and `ma_token` to be set.
+- The card uses an MA WebSocket for Recently Played, Recently Added and the queue view. It connects through HA ingress when `ma_addon_slug` is configured; otherwise it connects directly to `ma_url`. Both modes use `ma_token`.
 - The retro theme does not have a "light" variant
 
 ## Troubleshooting
@@ -244,7 +278,7 @@ Use the dropdown in the sidebar to switch between MA players. The volume slider 
 Add a `players:` list to your config with the exact entity IDs from Developer Tools → States.
 
 **No artwork showing**
-Check that your MA server is reachable at the `ma_url` you configured. Artwork is fetched directly from MA.
+In ingress mode, check that the MA add-on Web UI opens for the current HA user. Otherwise, check that your browser can reach the configured `ma_url`. Compare the same item in MA itself: a placeholder in both interfaces may mean MA has no artwork for that item.
 
 **Recently Played section missing or not updating**
 Add `ma_token` to your config. Without it the section is skipped silently.
@@ -253,6 +287,34 @@ There is a known bug in Music Assistant where certain players do not track playe
 
 **Card not loading**
 Check the browser console (F12) for errors. Make sure the resource is registered as a JavaScript Module (not a regular JS file).
+
+**Local JavaScript changes do not appear**
+HACS may serve `ma-browser-card.js.gz` instead of the edited `.js` file. When
+manually testing a patch, remove or rename the old `.gz` alongside it, then reload
+the dashboard. Keep only one resource registration for the card. See the
+[HACS dashboard documentation](https://www.hacs.xyz/docs/use/repositories/type/dashboard/).
+
+**Checking the ingress connection**
+In browser DevTools → Network → WS, the MA socket should use
+`wss://YOUR-HA-HOST/api/hassio_ingress/…/ws` when HA is opened over HTTPS.
+No direct `ws://MA-IP:8095/ws` connection should be made by the card in ingress
+mode. Do not share the token, ingress cookies, or complete ingress URLs in reports.
+
+## Development checks
+
+The ingress regression tests use Node's built-in test runner with mocked browser,
+Supervisor, and WebSocket interfaces (Node.js 18 or later):
+
+```sh
+node --check ma-browser-card.js
+node --test tests/ingress.test.cjs
+```
+
+These check routing, image URL rewriting, session renewal, failure handling,
+reconnects, connection cleanup, and chunked responses. They do not replace live
+HA/MA testing. For a live check, verify token-dependent features, artwork and queue
+controls through HTTPS, navigation away/back, and a session lasting more than five
+minutes. Also check direct HTTPS and local HTTP when changing those code paths.
 
 ## Credits
 
