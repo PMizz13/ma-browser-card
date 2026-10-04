@@ -118,6 +118,7 @@ config_entry_id: 01JNBHFPQSJY03ANJ6XXF053W2
 ma_url: http://192.168.1.x:8095
 ma_token: eyJ...               # Optional — enables Recently Played, Recently Added,
                                 # Browse, Queue view, and Up Next/Continue Listening sections
+username: your_ma_user         # Optional — show this MA user's favourites (favourites are per user)
 height: 580                    # Card height in pixels (default: 580)
 players:                       # Optional — limit to specific MA players
   - media_player.kitchen_speaker    # If omitted, auto-detects all MA players
@@ -207,6 +208,7 @@ custom_colors:     #Optional - override the theme colours
 | `ma_url`             | Unless using ingress | - | MA server URL. Direct access from an HTTPS dashboard requires HTTPS; optional original address for artwork rewriting in ingress mode. |
 | `ma_addon_slug`      | No | - | Installed MA add-on slug. Enables data and artwork access through Home Assistant ingress. |
 | `ma_token`           | No       | -       | MA access token — enables Recently Played, Recently Added, Browse, Queue view, and Up Next/Continue Listening sections |
+| `username`           | No       | -       | MA username whose favourites to show. Favourites are per user in Music Assistant; without this the integration's default (unassigned) favourites are used |
 | `players`            | No       | all     | List of `media_player` entity IDs to show in the player selector |
 | `click_action`       | No       | play    | What to do when media is clicked (play, enqueue, browse)         |
 | `show_podcasts`      | No       | false   | Adds a Podcasts section to the sidebar and search                |

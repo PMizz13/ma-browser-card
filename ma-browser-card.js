@@ -725,7 +725,7 @@ class MABrowserCard extends HTMLElement {
   }
 
   async _callService(service, data) {
-    return this._hass.connection.sendMessagePromise({ type:'call_service', domain:'music_assistant', service, service_data:{ config_entry_id:this._config.config_entry_id, ...data }, return_response:true });
+    return this._hass.connection.sendMessagePromise({ type:'call_service', domain:'music_assistant', service, service_data:{ config_entry_id:this._config.config_entry_id, ...(this._config.username?{username:this._config.username}:{}), ...data }, return_response:true });
   }
   async _fetchLibrary(mediaType, orderBy, limit, favoritesOnly=false) {
     const data={media_type:mediaType,order_by:orderBy,limit}; if(favoritesOnly) data.favorite=true;
@@ -1618,6 +1618,7 @@ class MABrowserCardEditor extends HTMLElement {
       +this._textField('ma_url','MA Server URL',c.ma_url||'','http://192.168.1.x:8095','Original MA address including port; optional with ingress, useful for rewriting artwork URLs')
       +'<div class="section-title">Recommended</div>'
       +this._pwField('ma_token','MA Access Token',c.ma_token||'','eyJ...','MA \u2192 Profile \u2192 Access Tokens \u2014 enables Recently Played &amp; Recently Added')
+      +this._textField('username','MA Username',c.username||'','','Music Assistant user whose favourites to show \u2014 favourites are per user; leave empty for the integration default')
       +'<div class="section-title">Layout</div>'
       +'<div class="field-row"><label>Sidebar position</label><select id="sidebar_position"><option value="left"'+(sp==='left'?' selected':'')+'>Left (default)</option><option value="top"'+(sp==='top'?' selected':'')+'>Top (horizontal nav bar)</option></select></div>'
       +'<div class="field-row"><label>Player position</label><select id="player_position"><option value="bottom"'+(pp==='bottom'?' selected':'')+'>Bottom (default)</option><option value="top"'+(pp==='top'?' selected':'')+'>Top</option></select><div class="hint">In top sidebar mode: bottom pins player to card bottom</div></div>'
@@ -1698,7 +1699,7 @@ class MABrowserCardEditor extends HTMLElement {
     sr.addEventListener('pointerdown',e=>e.stopPropagation());
     sr.addEventListener('mousedown',e=>e.stopPropagation());
     sr.addEventListener('touchstart',e=>e.stopPropagation(),{passive:true});
-    ['config_entry_id','ma_url','ma_addon_slug','title','subtitle','icon'].forEach(id=>{const el=sr.getElementById(id);if(el)el.addEventListener('change',()=>self._set(id,el.value.trim()||undefined));});
+    ['config_entry_id','ma_url','username','ma_addon_slug','title','subtitle','icon'].forEach(id=>{const el=sr.getElementById(id);if(el)el.addEventListener('change',()=>self._set(id,el.value.trim()||undefined));});
     const tokenEl=sr.getElementById('ma_token');if(tokenEl)tokenEl.addEventListener('change',()=>self._set('ma_token',tokenEl.value.trim()||undefined));
     const playersEl=sr.getElementById('players');if(playersEl)playersEl.addEventListener('change',()=>{const val=playersEl.value.trim();self._set('players',val?val.split(',').map(s=>s.trim()).filter(Boolean):undefined);});
     ['sidebar_position','player_position','theme','click_action'].forEach(id=>{const el=sr.getElementById(id);if(el)el.addEventListener('change',()=>self._set(id,el.value));});
