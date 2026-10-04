@@ -113,6 +113,7 @@ direct HTTP remains supported when the dashboard itself uses HTTP.
 
 ### Full config
 
+```yaml
 type: custom:ma-browser-card
 config_entry_id: 01JNBHFPQSJY03ANJ6XXF053W2
 ma_url: http://192.168.1.x:8095
@@ -197,6 +198,7 @@ custom_colors:     #Optional - override the theme colours
   text_nav: '#9898aa'
   other_text: '#55555f'
   border: '#ffffff12'
+```
 
 
 ### Config options
