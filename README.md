@@ -80,7 +80,7 @@ config_entry_id: 01JNBHFPQSJY03ANJ6XXF053W2
 ma_url: http://192.168.1.x:8095
 ```
 
-### Secure access through Home Assistant ingress
+### Secure access through Home Assistant ingress - Contributed by FabLabRacing
 
 For Music Assistant installed as a Home Assistant add-on/app, set
 `ma_addon_slug` to route the MA WebSocket and artwork through Home Assistant's
@@ -100,10 +100,6 @@ Find the add-on slug in the URL of its Home Assistant settings page. It is disti
 from the Music Assistant integration's `config_entry_id`. The add-on must be
 running and the current HA user must have permission to access its Web UI.
 
-In ingress mode, `ma_url` is only used to recognize artwork URLs returned with the
-original server address, so retaining it is useful. The browser does not connect
-to that address. The card obtains the ingress path and session from Home Assistant,
-renews the session periodically, and uses that path for MA data and artwork.
 Failed ingress connections never fall back to a direct LAN connection.
 
 This option requires HA's Supervisor and an ingress-enabled MA add-on; it does
