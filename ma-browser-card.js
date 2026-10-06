@@ -1,5 +1,5 @@
 /**
- * MA Browser Card  v3.9.1-ingress.1
+ * MA Browser Card  v3.9.2
  * A full-featured Music Assistant browser card for Home Assistant
  * GitHub: https://github.com/PMizz13/ma-browser-card
  *
