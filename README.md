@@ -269,50 +269,36 @@ Use the dropdown in the sidebar to switch between MA players. The volume slider 
 - Library browsing loads up to 500 items per section for performance. Search covers your full library regardless of this limit.
 - The card uses an MA WebSocket for Recently Played, Recently Added and the queue view. It connects through HA ingress when `ma_addon_slug` is configured; otherwise it connects directly to `ma_url`. Both modes use `ma_token`.
 - The retro theme does not have a "light" variant
+- There is currently no way to have the card associated with a different MA profile than the one logged in. The recommended work around is to create a conditional card for each user that logs into a dashboard if they want it configured differently.
 
 ## Troubleshooting
 
-**No players showing in the dropdown**
+- **No players showing in the dropdown**
 Add a `players:` list to your config with the exact entity IDs from Developer Tools → States.
 
-**No artwork showing**
+- **No artwork showing**
 In ingress mode, check that the MA add-on Web UI opens for the current HA user. Otherwise, check that your browser can reach the configured `ma_url`. Compare the same item in MA itself: a placeholder in both interfaces may mean MA has no artwork for that item.
 
-**Recently Played section missing or not updating**
+- **Recently Played section missing or not updating**
 Add `ma_token` to your config. Without it the section is skipped silently.
 If this is in the card yaml then reset the cache.
 There is a known bug in Music Assistant where certain players do not track played tracks. You will need to wait on a fix from Music Assistant.
 
-**Card not loading**
+- **Card not loading**
 Check the browser console (F12) for errors. Make sure the resource is registered as a JavaScript Module (not a regular JS file).
 
-**Local JavaScript changes do not appear**
+- **Local JavaScript changes do not appear**
 HACS may serve `ma-browser-card.js.gz` instead of the edited `.js` file. When
 manually testing a patch, remove or rename the old `.gz` alongside it, then reload
 the dashboard. Keep only one resource registration for the card. See the
 [HACS dashboard documentation](https://www.hacs.xyz/docs/use/repositories/type/dashboard/).
 
-**Checking the ingress connection**
+- **Checking the ingress connection**
 In browser DevTools → Network → WS, the MA socket should use
 `wss://YOUR-HA-HOST/api/hassio_ingress/…/ws` when HA is opened over HTTPS.
 No direct `ws://MA-IP:8095/ws` connection should be made by the card in ingress
 mode. Do not share the token, ingress cookies, or complete ingress URLs in reports.
 
-## Development checks
-
-The ingress regression tests use Node's built-in test runner with mocked browser,
-Supervisor, and WebSocket interfaces (Node.js 18 or later):
-
-```sh
-node --check ma-browser-card.js
-node --test tests/ingress.test.cjs
-```
-
-These check routing, image URL rewriting, session renewal, failure handling,
-reconnects, connection cleanup, and chunked responses. They do not replace live
-HA/MA testing. For a live check, verify token-dependent features, artwork and queue
-controls through HTTPS, navigation away/back, and a session lasting more than five
-minutes. Also check direct HTTPS and local HTTP when changing those code paths.
 
 ## Credits
 
