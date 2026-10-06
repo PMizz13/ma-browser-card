@@ -100,6 +100,8 @@ Find the add-on slug in the URL of its Home Assistant settings page. It is disti
 from the Music Assistant integration's `config_entry_id`. The add-on must be
 running and the current HA user must have permission to access its Web UI.
 
+Navigate to Settings > Apps > Music Assistant and check the URL for your details.
+
 Failed ingress connections never fall back to a direct LAN connection.
 
 This option requires HA's Supervisor and an ingress-enabled MA add-on; it does
