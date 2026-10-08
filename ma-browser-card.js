@@ -1,5 +1,5 @@
 /**
- * MA Browser Card  v3.9.2
+ * MA Browser Card  v3.10.0
  * A full-featured Music Assistant browser card for Home Assistant
  * GitHub: https://github.com/PMizz13/ma-browser-card
  *
@@ -21,7 +21,8 @@
  *   ma_addon_slug: d5369777_music_assistant  # optional: route via HA ingress
  *
  *   # Recommended
- *   ma_token: eyJ...                # enables Recently Played / Recently Added
+ *   ma_token: eyJ...                # enables Recently Played / Recently Added,
+ *                                   # Browse, Queue view and Add/Remove favourites
  *
  *   # Layout
  *   height: 580
@@ -52,7 +53,9 @@
  *                                    #   of playing immediately (artists already do this).
  *                                    #   Right-click / long-press always shows the full menu,
  *                                    #   which also includes "Browse tracks" for albums and
- *                                    #   playlists regardless of this setting.
+ *                                    #   playlists regardless of this setting. With ma_token set
+ *                                    #   it also offers "Add to favourites" / "Remove from
+ *                                    #   favourites" (whichever applies) for items MA can favourite.
  *
  *   # Optional content types (off by default)
  *   show_podcasts: false
@@ -154,7 +157,8 @@ const CSS = `
   .card.theme-retro .queue-art,.card.theme-retro .queue-item,
   .card.theme-retro .np-art,.card.theme-retro .artist-hero,
   .card.theme-retro .artist-detail-back,.card.theme-retro .skel-art,
-  .card.theme-retro .skel-line,.card.theme-retro .spinner { border-radius:0!important; }
+  .card.theme-retro .skel-line,.card.theme-retro .spinner,
+  .card.theme-retro .toast { border-radius:0!important; }
   .card.theme-retro { background:linear-gradient(160deg,#d8d4cc 0%,#c0bcb4 30%,#b8b4ac 60%,#c8c4bc 100%); }
   .card.theme-retro .logo { background:linear-gradient(180deg,#1a1a1a 0%,#222 100%); border-bottom:2px solid #000; padding:8px 13px; }
   .card.theme-retro .logo-icon { background:#cccc00; border-top:2px solid #ffff88; border-left:2px solid #ffff88; border-bottom:2px solid #666600; border-right:2px solid #666600; }
@@ -216,6 +220,7 @@ const CSS = `
   .card.theme-retro .ctx-item { color:#ccc; font-size:12px; }
   .card.theme-retro .ctx-item:hover { background:#000080; color:#fff; }
   .card.theme-retro .spinner { border-color:#888; border-top-color:#22cc00; }
+  .card.theme-retro .toast { background:#1a1a1a; color:#22cc00; border:2px solid #4a4a4a; }
   /* TOP SIDEBAR */
   .card.sidebar-top { flex-direction:column; }
   .card.sidebar-top .sidebar { width:100%; flex-direction:column; border-right:none; border-bottom:1px solid var(--border); flex-shrink:0; height:auto; }
@@ -347,6 +352,8 @@ const CSS = `
   .ctx-item { display:flex; align-items:center; gap:9px; padding:8px 11px; border-radius:6px; cursor:pointer; font-size:12.5px; color:var(--t1); transition:background .1s; }
   .ctx-item:hover { background:var(--bg3); }
   .ctx-ico { font-size:14px; width:18px; text-align:center; }
+  /* TOAST */
+  .toast { position:absolute; left:50%; bottom:70px; transform:translateX(-50%); background:var(--bg3); color:var(--t1); border:1px solid var(--gold-border); padding:8px 14px; border-radius:20px; font-size:12px; z-index:1000; box-shadow:0 4px 16px rgba(0,0,0,.5); max-width:80%; text-align:center; pointer-events:none; }
   /* QUEUE PANEL */
   .queue-panel { position:absolute; inset:0; background:var(--bg-sidebar); display:flex; flex-direction:column; z-index:10; animation:slideUp .2s ease; }
   @keyframes slideUp { from { transform:translateY(20px); opacity:0; } to { transform:none; opacity:1; } }
@@ -409,6 +416,14 @@ const HOME_ORDER_LABELS = {
   recently_added: 'Recently Added', discover: 'Discover',
 };
 const SEARCH_ORDER_LABELS = { albums: 'Albums', artists: 'Artists', tracks: 'Tracks', playlists: 'Playlists', podcasts: 'Podcasts', audiobooks: 'Audiobooks', radio: 'Radio' };
+
+// Media types the context menu will consider for "Add to / Remove from
+// favourites". Podcast episodes are deliberately absent (MA only favourites
+// the show, not individual episodes). For anything listed here the option is
+// only shown if MA reports a boolean `favorite` flag on the item — items
+// without one are treated as "not favouritable" and the option is hidden.
+const FAVOURITABLE_TYPES = ['artist','album','track','playlist','radio','podcast','audiobook'];
+
 // Given a configured order array (may be missing/short/stale), returns a
 // complete, de-duplicated order covering every known key — falls back to
 // defaultOrder and appends any keys the person's saved order left out.
@@ -625,6 +640,9 @@ class MABrowserCard extends HTMLElement {
   _fmtDur(sec) { if(!sec) return''; return `${Math.floor(sec/60)}:${String(Math.floor(sec%60)).padStart(2,'0')}`; }
   _artUrl(item) { if(!item) return null; return this._imageUrl(item.image||item.image_url||item.album?.image||item.album?.image_url); }
   _artistName(item) { return item?.artists?.length ? item.artists.map(a=>a.name).join(', ') : ''; }
+  // Favourite state carried on the rendered element so the context menu can
+  // be contextual without another lookup. Absent = MA didn't report one.
+  _favAttr(item) { return typeof item?.favorite==='boolean' ? ` data-fav="${item.favorite?1:0}"` : ''; }
 
   // ── Placeholders ─────────────────────────────────────────────
   // SVG fallbacks used when MA logo image fails or for specific types
@@ -985,6 +1003,72 @@ class MABrowserCard extends HTMLElement {
     } catch(e){console.warn('[MA Card] in_progress_items failed:',e.message);return[];}
   }
 
+  // ── FAVOURITES ────────────────────────────────────────────────
+  // Fetch an item from MA. The type-specific getter goes first: it copes with
+  // provider URIs (e.g. itunes_podcasts://podcast/123) and returns the library
+  // copy when there is one. item_by_uri is the fallback.
+  async _lookupItem(uri, type) {
+    const parsed=this._parseUri(uri);
+    if(parsed) {
+      try {
+        const item=await this._wsSend(`music/${type}s/get_${type}`,{item_id:parsed.item_id,provider_instance_id_or_domain:parsed.provider});
+        if(item) return item;
+      } catch(e) { /* fall through to item_by_uri */ }
+    }
+    return this._wsSend('music/item_by_uri',{uri});
+  }
+  // Current favourite flag from MA: true/false, or null if MA doesn't report
+  // one (= not favouritable) or the lookup fails.
+  async _resolveFavState(uri, type) {
+    if(!await this._waitForWS()) return null;
+    try {
+      const item=await this._lookupItem(uri,type);
+      return typeof item?.favorite==='boolean' ? item.favorite : null;
+    } catch(e){ return null; }
+  }
+  // MA removes favourites by library item id, not URI. Library URIs
+  // (library://album/50) carry it directly; for provider URIs, ask MA and
+  // use its library mapping.
+  async _libraryItemId(uri, type) {
+    const parsed=this._parseUri(uri);
+    if(parsed?.provider==='library') return parsed.item_id;
+    const item=await this._lookupItem(uri,type);
+    if(item?.provider==='library') return item.item_id;
+    const mapping=(item?.provider_mappings||[]).find(m=>m.provider_domain==='library'||m.provider_instance==='library');
+    if(mapping?.item_id) return mapping.item_id;
+    throw new Error('This item isn\u2019t in your library, so there\u2019s no favourite to remove.');
+  }
+  async _toggleFavourite(uri, type, name, isFav) {
+    try {
+      if(!await this._waitForWS()) throw new Error('Favourites need the MA access token (ma_token) and a working MA connection.');
+      if(isFav) {
+        const libraryId=await this._libraryItemId(uri,type);
+        await this._wsSend('music/favorites/remove_item',{media_type:type,library_item_id:libraryId});
+      } else {
+        await this._wsSend('music/favorites/add_item',{item:uri});
+      }
+      // Don't re-render: drop cached lists so the next view change / search
+      // fetches fresh data, and keep the cards already on screen in sync so
+      // their right-click menu shows the right option.
+      this._libCache={};
+      this._setFavState(uri,!isFav);
+      this._toast(isFav?`Removed "${name}" from favourites`:`Added "${name}" to favourites`);
+    } catch(e) {
+      console.warn('[MA Card] favourite toggle failed:',e);
+      this._toast(`Couldn\u2019t ${isFav?'remove from':'add to'} favourites: ${e.message}`);
+    }
+  }
+  _setFavState(uri, isFav) {
+    this._scroll().querySelectorAll('[data-uri]').forEach(el=>{ if(el.dataset.uri===uri) el.dataset.fav=isFav?'1':'0'; });
+  }
+  _toast(text) {
+    const card=this.shadowRoot.querySelector('.card'); if(!card) return;
+    card.querySelector('.toast')?.remove();
+    const t=document.createElement('div'); t.className='toast'; t.textContent=text;
+    card.appendChild(t);
+    setTimeout(()=>t.remove(),2500);
+  }
+
   // ── PLAYERS ───────────────────────────────────────────────────
   _loadPlayers() {
     const sel=this._$('playerSel'); let entities=[];
@@ -1137,7 +1221,7 @@ class MABrowserCard extends HTMLElement {
             <button class="artist-detail-back" data-action="back">&#x2190; Back</button>
           </div>
         </div>
-        ${tracks.length?this._section('Tracks',tracks.map((t,i)=>this._trackRowHtml(t,i+1,inAlbum)).join(''),'track-list',tracks.length,this._sectionActions(tracks)):'<div class="state-box">No tracks found</div>'}`;
+        ${tracks.length?this._section('Tracks',tracks.map((t,i)=>this._trackRowHtml(t,i+1,inAlbum,type==='podcast')).join(''),'track-list',tracks.length,this._sectionActions(tracks)):'<div class="state-box">No tracks found</div>'}`;
       this._hydrateImages(); this._attachClickHandler();
     } catch(e){this._err(e,()=>this._renderContentDetail(uri,type,name,artist,artUrl));}
   }
@@ -1201,7 +1285,7 @@ class MABrowserCard extends HTMLElement {
       ? `data-img="${this._esc(artUrl)}" data-placeholder-type="${mediaType}"`
       : (useMaLogo ? `data-ma-logo="${mediaType}"` : '');
     const artist=this._artistName(item),uri=item.uri||'',name=item.name||'';
-    return `<div class="album-card" data-uri="${this._esc(uri)}" data-type="${mediaType}" data-name="${this._esc(name)}" data-artist="${this._esc(artist)}" data-art="${this._esc(artUrl||'')}">
+    return `<div class="album-card" data-uri="${this._esc(uri)}" data-type="${mediaType}" data-name="${this._esc(name)}" data-artist="${this._esc(artist)}" data-art="${this._esc(artUrl||'')}"${this._favAttr(item)}>
       <div class="a-art-wrap" ${artAttrs}>${ph}<div class="a-overlay"><div class="play-circle">&#x25B6;&#xFE0E;</div></div><div class="playing-badge">&#x25B6;&#xFE0E; playing</div></div>
       <div class="a-name" title="${this._esc(name)}">${this._esc(name)}</div>
       <div class="a-artist">${this._esc(artist)}</div>
@@ -1226,7 +1310,7 @@ class MABrowserCard extends HTMLElement {
       const name=item.name||'',uri=item.uri||'';
       const ph=this._placeholder('artist');
       const artAttrs=artUrl?`data-img="${this._esc(artUrl)}" data-placeholder-type="artist"`:'';
-      return `<div class="artist-card" data-uri="${this._esc(uri)}" data-type="artist" data-name="${this._esc(name)}" data-art="${this._esc(artUrl||'')}"><div class="ar-img" ${artAttrs}>${ph}</div><div class="ar-name">${this._esc(name)}</div></div>`;
+      return `<div class="artist-card" data-uri="${this._esc(uri)}" data-type="artist" data-name="${this._esc(name)}" data-art="${this._esc(artUrl||'')}"${this._favAttr(item)}><div class="ar-img" ${artAttrs}>${ph}</div><div class="ar-name">${this._esc(name)}</div></div>`;
     }
     const ph=this._placeholder(mediaType);
     const useMaLogo = !artUrl && mediaType !== 'track';
@@ -1234,7 +1318,7 @@ class MABrowserCard extends HTMLElement {
       ? `data-img="${this._esc(artUrl)}" data-placeholder-type="${mediaType}"`
       : (useMaLogo ? `data-ma-logo="${mediaType}"` : '');
     const uri=item.uri||'',name=item.name||'';
-    return `<div class="album-card" data-uri="${this._esc(uri)}" data-type="${mediaType}" data-name="${this._esc(name)}" data-artist="" data-art="${this._esc(artUrl||'')}">
+    return `<div class="album-card" data-uri="${this._esc(uri)}" data-type="${mediaType}" data-name="${this._esc(name)}" data-artist="" data-art="${this._esc(artUrl||'')}"${this._favAttr(item)}>
       <div class="a-art-wrap" ${artAttrs}>${ph}<div class="a-overlay"><div class="play-circle">&#x25B6;&#xFE0E;</div></div></div>
       <div class="a-name" title="${this._esc(name)}">${this._esc(name)}</div>
     </div>`;
@@ -1264,8 +1348,14 @@ class MABrowserCard extends HTMLElement {
     const uri=item.uri||'',name=item.name||'';
     const parent=item.podcast?.name||item.show?.name||item.audiobook?.name||'';
     const pct=this._progressPct(item);
+    // Episodes can't be favourited, but their show can: point the menu at it.
+    const pod=mediaType==='podcast_episode'?item.podcast:null;
+    const podUri=pod?(pod.uri||(pod.provider&&pod.item_id?`${pod.provider}://podcast/${pod.item_id}`:'')):'';
+    const favAttrs=podUri
+      ?` data-fav-uri="${this._esc(podUri)}" data-fav-type="podcast" data-fav-name="${this._esc(pod.name||'')}"`
+      :this._favAttr(item);
     const progressHtml=pct!=null?`<div style="position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(0,0,0,.4)"><div style="height:100%;width:${pct}%;background:var(--gold)"></div></div>`:'';
-    return `<div class="album-card" data-uri="${this._esc(uri)}" data-type="${mediaType}" data-name="${this._esc(name)}" data-artist="" data-art="${this._esc(artUrl||'')}">
+    return `<div class="album-card" data-uri="${this._esc(uri)}" data-type="${mediaType}" data-name="${this._esc(name)}" data-artist="" data-art="${this._esc(artUrl||'')}"${favAttrs}>
       <div class="a-art-wrap" ${artAttrs}>${ph}<div class="a-overlay"><div class="play-circle">&#x25B6;&#xFE0E;</div></div>${progressHtml}</div>
       <div class="a-name" title="${this._esc(name)}">${this._esc(name)}</div>
       ${parent?`<div class="a-artist">${this._esc(parent)}</div>`:''}
@@ -1275,16 +1365,16 @@ class MABrowserCard extends HTMLElement {
     const artUrl=this._artUrl(item),name=item.name||'',uri=item.uri||'';
     const ph=this._placeholder('artist');
     const artAttrs=artUrl?`data-img="${this._esc(artUrl)}" data-placeholder-type="artist"`:'';
-    return `<div class="artist-card" data-uri="${this._esc(uri)}" data-type="artist" data-name="${this._esc(name)}" data-art="${this._esc(artUrl||'')}"><div class="ar-img" ${artAttrs}>${ph}</div><div class="ar-name">${this._esc(name)}</div></div>`;
+    return `<div class="artist-card" data-uri="${this._esc(uri)}" data-type="artist" data-name="${this._esc(name)}" data-art="${this._esc(artUrl||'')}"${this._favAttr(item)}><div class="ar-img" ${artAttrs}>${ph}</div><div class="ar-name">${this._esc(name)}</div></div>`;
   }
 
-  _trackRowHtml(item,num,inAlbum) {
+  _trackRowHtml(item,num,inAlbum,noFav) {
     const artUrl=this._artUrl(item);
     const ph=this._placeholder('track');
     const artAttrs=artUrl?`data-img="${this._esc(artUrl)}" data-placeholder-type="track"`:'';
     const artist=this._artistName(item),meta=inAlbum?artist:[artist,item.album?.name].filter(Boolean).join(' &middot; ');
     const uri=item.uri||'',name=item.name||'';
-    return `<div class="track-row" data-uri="${this._esc(uri)}" data-type="track" data-name="${this._esc(name)}">
+    return `<div class="track-row" data-uri="${this._esc(uri)}" data-type="track" data-name="${this._esc(name)}"${noFav?' data-nofav="1"':this._favAttr(item)}>
       <div class="tr-num">${num}</div><div class="tr-art" ${artAttrs}>${ph}</div>
       <div class="tr-info"><div class="tr-name">${this._esc(name)}</div>${meta?`<div class="tr-meta">${this._esc(meta)}</div>`:''}</div>
       <div class="tr-dur">${this._fmtDur(item.duration)}</div>
@@ -1298,7 +1388,7 @@ class MABrowserCard extends HTMLElement {
       ? `data-img="${this._esc(artUrl)}" data-placeholder-type="radio"`
       : `data-ma-logo="radio"`;
     const uri=item.uri||'',name=item.name||'',desc=item.metadata?.description||'';
-    return `<div class="album-card" data-uri="${this._esc(uri)}" data-type="radio" data-name="${this._esc(name)}" data-artist="" data-art="${this._esc(artUrl||'')}">
+    return `<div class="album-card" data-uri="${this._esc(uri)}" data-type="radio" data-name="${this._esc(name)}" data-artist="" data-art="${this._esc(artUrl||'')}"${this._favAttr(item)}>
       <div class="a-art-wrap" ${artAttrs}>${ph}<div class="a-overlay"><div class="play-circle">&#x25B6;&#xFE0E;</div></div></div>
       <div class="a-name" title="${this._esc(name)}">${this._esc(name)}</div>
       ${desc?`<div class="a-artist">${this._esc(desc)}</div>`:''}
@@ -1326,7 +1416,7 @@ class MABrowserCard extends HTMLElement {
       if (!target || !target.dataset.uri) return;
       _lpTimer = setTimeout(() => {
         if (!_lpMoved) {
-          this._showCtxMenu(touch.clientX, touch.clientY, target.dataset.uri, target.dataset.type || 'album', target.dataset.name || '', target.dataset.artist || '', target.dataset.art || '');
+          this._showCtxMenu(touch.clientX, touch.clientY, target.dataset.uri, target.dataset.type || 'album', target.dataset.name || '', target.dataset.artist || '', target.dataset.art || '', target.dataset);
         }
       }, 500);
     };
@@ -1365,9 +1455,9 @@ class MABrowserCard extends HTMLElement {
   _handleCtx(e) {
     const el=e.target.closest('.album-card')||e.target.closest('.artist-card')||e.target.closest('.track-row');
     if(!el||!el.dataset.uri) return; e.preventDefault();
-    this._showCtxMenu(e.clientX,e.clientY,el.dataset.uri,el.dataset.type||'album',el.dataset.name||'',el.dataset.artist||'',el.dataset.art||'');
+    this._showCtxMenu(e.clientX,e.clientY,el.dataset.uri,el.dataset.type||'album',el.dataset.name||'',el.dataset.artist||'',el.dataset.art||'',el.dataset);
   }
-  _showCtxMenu(x,y,uri,type,name,artist,artUrl) {
+  _showCtxMenu(x,y,uri,type,name,artist,artUrl,ds={}) {
     this._dismissCtx();
     const menu=document.createElement('div'); menu.className='ctx-menu';
     const browseLabel=type==='artist'?'Browse albums':type==='podcast'?'Browse episodes':'Browse tracks';
@@ -1391,7 +1481,41 @@ class MABrowserCard extends HTMLElement {
     const card=this.shadowRoot.querySelector('.card'); card.appendChild(menu); this._ctxMenu=menu;
     const cardRect=card.getBoundingClientRect(); let mx=x-cardRect.left,my=y-cardRect.top;
     menu.style.cssText=`position:absolute;left:${mx}px;top:${my}px;`;
-    requestAnimationFrame(()=>{const mr=menu.getBoundingClientRect(),cr=cardRect;if(mr.right>cr.right)menu.style.left=(mx-mr.width)+'px';if(mr.bottom>cr.bottom)menu.style.top=(my-mr.height)+'px';});
+    // Keep the menu inside the card; re-run after the favourite item is added.
+    const fit=()=>{
+      const mr=menu.getBoundingClientRect(),cr=card.getBoundingClientRect();
+      if(mr.right>cr.right)menu.style.left=Math.max(0,mx-mr.width)+'px';
+      if(mr.bottom>cr.bottom)menu.style.top=Math.max(0,my-mr.height)+'px';
+    };
+    requestAnimationFrame(fit);
+
+    // Contextual "Add to / Remove from favourites". Only offered when:
+    //  - an MA token is configured (favourites go over the MA websocket),
+    //  - the type is one MA can favourite (not e.g. podcast episodes), and
+    //  - MA actually reports a favourite state for the item.
+    // Podcast episodes in "Up Next" carry their parent podcast's details
+    // (data-fav-*), so the menu there acts on the podcast itself.
+    const fUri=ds.favUri||uri, fType=ds.favType||type, fName=ds.favName||name;
+    if(this._maToken && !ds.nofav && FAVOURITABLE_TYPES.includes(fType)){
+      const what=ds.favUri?' podcast':'';
+      const addFavItem=isFav=>{
+        if(this._ctxMenu!==menu) return; // menu was dismissed / replaced meanwhile
+        const el=document.createElement('div'); el.className='ctx-item';
+        el.innerHTML=isFav
+          ?`<span class="ctx-ico">&#x2665;&#xFE0E;</span>Remove${what} from favourites`
+          :`<span class="ctx-ico">&#x2661;&#xFE0E;</span>Add${what} to favourites`;
+        el.addEventListener('click',e=>{
+          e.stopPropagation();
+          this._toggleFavourite(fUri,fType,fName,isFav);
+          this._dismissCtx();
+        });
+        menu.appendChild(el);
+        fit();
+      };
+      const known=ds.favUri?'':(ds.fav||'');
+      if(known==='1'||known==='0') addFavItem(known==='1');
+      else this._resolveFavState(fUri,fType).then(isFav=>{ if(isFav!==null) addFavItem(isFav); });
+    }
   }
   _dismissCtx(){if(this._ctxMenu){this._ctxMenu.remove();this._ctxMenu=null;}}
   _highlightNowPlaying() {
@@ -1617,7 +1741,7 @@ class MABrowserCardEditor extends HTMLElement {
       +this._textField('ma_addon_slug','MA add-on slug (secure ingress)',c.ma_addon_slug||'','d5369777_music_assistant','Routes MA data and artwork through Home Assistant; requires the MA add-on')
       +this._textField('ma_url','MA Server URL',c.ma_url||'','http://192.168.1.x:8095','Original MA address including port; optional with ingress, useful for rewriting artwork URLs')
       +'<div class="section-title">Recommended</div>'
-      +this._pwField('ma_token','MA Access Token',c.ma_token||'','eyJ...','MA \u2192 Profile \u2192 Access Tokens \u2014 enables Recently Played &amp; Recently Added')
+      +this._pwField('ma_token','MA Access Token',c.ma_token||'','eyJ...','MA \u2192 Profile \u2192 Access Tokens \u2014 enables Recently Played &amp; Recently Added, Browse, Queue view and Add/Remove favourites')
       +'<div class="section-title">Layout</div>'
       +'<div class="field-row"><label>Sidebar position</label><select id="sidebar_position"><option value="left"'+(sp==='left'?' selected':'')+'>Left (default)</option><option value="top"'+(sp==='top'?' selected':'')+'>Top (horizontal nav bar)</option></select></div>'
       +'<div class="field-row"><label>Player position</label><select id="player_position"><option value="bottom"'+(pp==='bottom'?' selected':'')+'>Bottom (default)</option><option value="top"'+(pp==='top'?' selected':'')+'>Top</option></select><div class="hint">In top sidebar mode: bottom pins player to card bottom</div></div>'
