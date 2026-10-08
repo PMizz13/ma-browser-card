@@ -1,5 +1,12 @@
 # MA Browser Card
 
+## V 3.10.0
+New feature - Added the ability to add and remove favourites
+
+## V 3.9.2
+New Feature - Added optional ingress when using Music Assistant add-on for better connection from outside home network - Contributed by FabLabRacing
+
+
 ## V 3.9.1
 Fixed - Not all sections were accounted for when assigning custom colours
 
