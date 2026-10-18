@@ -68,8 +68,8 @@ Create a grid card with 1 column (or multiple if desired) and place this card in
 The `ma_token` enables Recently Played, Recently Added, Browse, Queue view, and the Up Next/Continue Listening sections. Basic library browsing and playback through the Home Assistant integration remain available without it. Ingress mode still uses this token for the MA API.
 
 1. Open the Music Assistant UI
-2. Click the profile icon (top right)
-3. Go to **Access Tokens**
+2. Click the profile icon (bottom of the side bar) and open profile
+3. Scroll to ** Long Lived Access Tokens**
 4. Create a new token and copy it
 
 ### Minimal config
