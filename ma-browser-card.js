@@ -22,7 +22,8 @@
  *
  *   # Recommended
  *   ma_token: eyJ...                # enables Recently Played / Recently Added,
- *                                   # Browse, Queue view and Add/Remove favourites
+ *                                   # Browse, Queue view (click a row to jump to
+ *                                   # that track) and Add/Remove favourites
  *
  *   # Layout
  *   height: 580
@@ -1559,6 +1560,38 @@ class MABrowserCard extends HTMLElement {
         this._loadImgInto(url,el,ph);
       });
       setTimeout(()=>{const active=qScroll.querySelector('.queue-item.active');if(active)active.scrollIntoView({block:'center',behavior:'smooth'});},100);
+
+      // Play a track out of sequence: click any queue row to jump playback to it.
+      let jumping = false;
+      qScroll.querySelectorAll('.queue-item').forEach((el, i) => {
+        const item = queueItems[i];
+        if (!item) return;
+        if (item.sort_index === currentIndex) { el.style.cursor = 'default'; return; }
+        el.addEventListener('click', () => {
+          if (jumping) return;
+          jumping = true;
+          this._wsSend('player_queues/play_index', { queue_id: queueId, index: item.queue_item_id })
+            .then(() => this._wsSend('player_queues/get', { queue_id: queueId }))
+            .then(q => {
+              // play_index leaves an idle queue idle; start playback if needed
+              if (q?.state !== 'playing') return this._wsSend('player_queues/play', { queue_id: queueId });
+            })
+            .then(() => {
+              this._lastNpKey = '';
+              this._updateNowPlaying();
+              setTimeout(() => {
+                if (!this._queueVisible) return; // user closed the panel meanwhile
+                this._hideQueue();
+                this._showQueue();
+              }, 1200);
+            })
+            .catch(e => {
+              console.warn('[MA Card] queue jump failed:', e);
+              this._toast(`Couldn\u2019t jump to track: ${e.message}`);
+            })
+            .finally(() => { jumping = false; });
+        });
+      });
     } catch(e){const qs=panel.querySelector('#qScroll');if(qs)qs.innerHTML=`<div class="state-box"><div class="err-txt">${e.message}</div></div>`;}
   }
   _hideQueue(){this._queueVisible=false;const p=this.shadowRoot.getElementById('queuePanel');if(p)p.remove();}
