@@ -1,5 +1,8 @@
 # MA Browser Card
 
+## V 3.10.1
+Items in the player queue can now be selected to jump forwards or backwards.
+
 ## V 3.10.0
 New feature - Added the ability to add and remove favourites
 
