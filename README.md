@@ -198,6 +198,17 @@ custom_colors:     #Optional - override the theme colours
   border: '#ffffff12'
 
 
+auto_follow: true               # select a currently playing player automatically
+manual_hold_minutes: 5          # how long a manual pick overrides auto_follow (0 = until page reload)
+use_app_area: true              # when nothing is playing, pick the first player in this device's area
+default_player: media_player.living_room   # optional fallback when nothing is playing
+area: kitchen                   # optional override for the detected area (name or ID)
+
+
+show_all_playing_players: true  # strip above the player bar listing other playing players
+
+
+
 ### Config options
 
 | Option               | Required | Default | Description                                                      |
@@ -244,6 +255,14 @@ custom_colors:     #Optional - override the theme colours
 | `custom_colors.text_nav`| No | `#9898aa` | Nav button text                 |
 | `custom_colors.other_text`| No | `#55555f` | Secondary/meta text (artist names, etc.)                    |
 | `custom_colors.border`| No | `#ffffff12` | Box and card borders                |
+| **Player Selection** |          |         |                                                                  |
+| `auto_follow`        | No       | `true`  | Automatically selects a currently playing player. If several are playing, the first in the list is used (or one in this device's area, if `use_app_area` is on) |
+| `manual_hold_minutes`| No       | `5`     | How long a manually chosen player overrides `auto_follow`. `0` holds until the page is reloaded |
+| `use_app_area`       | No       | `true`  | When nothing is playing, selects the first player in the same area as the device running the card |
+| `default_player`     | No       | -       | Player entity (e.g. `media_player.sonos1`) used when nothing is playing and no area player applies. Falls back to the top of the list |
+| `area`               | No       | -       | Overrides the detected area (area name or ID). Can also be set per device with `?area=kitchen` on the dashboard URL |
+| `show_all_playing_players` | No | `true`  | Shows a strip above the player bar listing the other playing players with artwork. Sync groups appear once and the selected player is left out |
+
 
 ## Usage
 
