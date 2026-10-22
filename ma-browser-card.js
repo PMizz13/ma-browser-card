@@ -1,5 +1,5 @@
 /**
- * MA Browser Card  v3.10.1
+ * MA Browser Card  v3.11.0
  * A full-featured Music Assistant browser card for Home Assistant
  * GitHub: https://github.com/PMizz13/ma-browser-card
  *
@@ -105,6 +105,22 @@
  *   players:
  *     - media_player.kitchen
  *     - media_player.living_room
+ *
+ *   # Player selection
+ *   auto_follow: true               # select a currently playing player automatically
+ *                                   #   (several playing -> first in the list; a player in
+ *                                   #   this device's area wins if use_app_area is on)
+ *   manual_hold_minutes: 5          # how long a manual pick overrides auto_follow
+ *                                   #   (0 = until the page is reloaded)
+ *   use_app_area: true              # when nothing is playing, select the first player in
+ *                                   #   the same area as the device running this card
+ *   default_player: media_player.x  # optional: used when nothing is playing and no area
+ *                                   #   player applies (otherwise the top of the list)
+ *   area: kitchen                   # optional override for the detected area (area name or
+ *                                   #   ID). Also read from ?area=kitchen in the URL, or
+ *                                   #   detected via Browser Mod's browser ID.
+ *   show_all_playing_players: true  # strip above the player bar listing everything playing
+ *                                   #   (sync groups shown once)
  *
  * ───────────────────────────────────────────────────────────────────────
  */
@@ -289,6 +305,19 @@ const CSS = `
   .vol-slider { flex:1; -webkit-appearance:none; appearance:none; height:3px; border-radius:2px; outline:none; cursor:pointer; background:linear-gradient(to right,var(--gold) 0%,var(--gold) var(--vol-pct,50%),var(--bg3) var(--vol-pct,50%),var(--bg3) 100%); }
   .vol-slider::-webkit-slider-thumb { -webkit-appearance:none; width:13px; height:13px; border-radius:50%; background:var(--gold); cursor:pointer; }
   .vol-slider::-moz-range-thumb { width:13px; height:13px; border:none; border-radius:50%; background:var(--gold); cursor:pointer; }
+  /* PLAYING STRIP */
+  .playing-strip { display:flex; flex-direction:column; gap:3px; margin-bottom:10px; max-height:132px; overflow-y:auto; scrollbar-width:thin; scrollbar-color:var(--bg3) transparent; }
+  .pl-item { display:flex; align-items:center; gap:8px; padding:4px; border-radius:7px; cursor:pointer; border:1px solid transparent; min-width:0; transition:background .12s; }
+  .pl-item:hover { background:var(--bg2); }
+  .pl-item.selected { background:var(--gold-bg); border-color:var(--gold-border); }
+  .pl-art { width:32px; height:32px; border-radius:5px; background-color:var(--bg3); background-size:cover; background-position:center; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:14px; color:var(--t3); }
+  .pl-info { flex:1; min-width:0; }
+  .pl-name { font-size:11px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--t1); }
+  .pl-track { font-size:10px; color:var(--t3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px; }
+  .card.sidebar-top .playing-strip { flex:0 0 100%; flex-direction:row; overflow-x:auto; overflow-y:hidden; max-height:none; margin-bottom:0; }
+  .card.sidebar-top .pl-item { flex:0 0 auto; width:170px; }
+  .card.theme-retro .pl-item, .card.theme-retro .pl-art { border-radius:0!important; }
+  .card.theme-retro .pl-name { color:#22cc00; }
   /* MAIN */
   .main { flex:1; display:flex; flex-direction:column; overflow:hidden; min-width:0; }
   .topbar { display:flex; align-items:center; gap:9px; padding:10px 13px; border-bottom:1px solid var(--border); flex-shrink:0; }
@@ -447,6 +476,7 @@ class MABrowserCard extends HTMLElement {
     this._queueVisible = false; this._ctxMenu = null;
     this._ws = null; this._wsReady = false; this._wsMsgId = 100; this._wsPending = {};
     this._maQueueState = null; this._progressTimer = null;
+    this._manualAt = 0; this._areaId = null; this._areaTs = 0; this._lastStripKey = '';
   }
 
   setConfig(config) {
@@ -513,6 +543,7 @@ class MABrowserCard extends HTMLElement {
     }
 
     const playerBarHtml = `<div class="player-bar">
+        <div class="playing-strip" id="playingStrip" style="display:none"></div>
         <div class="np-row" id="npRow"><div class="np-art" id="npArt">&#9834;&#xFE0E;</div>
           <div class="np-info"><div class="np-title" id="npTitle">Nothing playing</div><div class="np-artist" id="npArtist">&mdash;</div></div></div>
         <div class="controls">
@@ -545,8 +576,8 @@ class MABrowserCard extends HTMLElement {
         <button class="nav-btn" data-view="artists"><span class="nav-ico">&#x266A;&#xFE0E;</span>Artists</button>
         <button class="nav-btn" data-view="tracks"><span class="nav-ico">&#x266B;&#xFE0E;</span>Tracks</button>
         <button class="nav-btn" data-view="playlists"><span class="nav-ico">&#x2630;&#xFE0E;</span>Playlists</button>
-        ${this._config.show_podcasts?`<button class="nav-btn" data-view="podcasts"><span class="nav-ico">&#x24C5;&#xFE0E;</span>Podcasts</button>`:''}
-        ${this._config.show_audiobooks?`<button class="nav-btn" data-view="audiobooks"><span class="nav-ico">&#x24B7;&#xFE0E;</span>Audiobooks</button>`:''}
+        ${this._config.show_podcasts?`<button class="nav-btn" data-view="podcasts"><span class="nav-ico">&#x1F399;&#xFE0E;</span>Podcasts</button>`:''}
+        ${this._config.show_audiobooks?`<button class="nav-btn" data-view="audiobooks"><span class="nav-ico">&#x1F56E;&#xFE0E;</span>Audiobooks</button>`:''}
       </nav>`;
 
     const outerLogo    = sidebarTop ? logoHtml : '';
@@ -588,7 +619,10 @@ class MABrowserCard extends HTMLElement {
     searchEl.addEventListener('keyup', searchHandler);
     searchEl.addEventListener('keydown', e => e.stopPropagation());
     clearBtn.addEventListener('click', () => { searchEl.value = ''; clearBtn.classList.remove('visible'); this._renderView(this._view); });
-    this.shadowRoot.getElementById('playerSel').addEventListener('change', e => { this._selectedPlayer = e.target.value || null; this._lastNpKey = ''; this._updateNowPlaying(); });
+    this.shadowRoot.getElementById('playerSel').addEventListener('change', e => {
+      const v = e.target.value;
+      if (v) this._selectPlayer(v, true); else this._selectedPlayer = null;
+    });
     this.shadowRoot.getElementById('btnPlay').addEventListener('click', () => this._togglePlay());
     this.shadowRoot.getElementById('btnPrev').addEventListener('click', () => this._playerCmd('previous'));
     this.shadowRoot.getElementById('btnNext').addEventListener('click', () => this._playerCmd('next'));
@@ -596,6 +630,10 @@ class MABrowserCard extends HTMLElement {
     this.shadowRoot.getElementById('btnRepeat').addEventListener('click', () => this._toggleRepeat());
     this.shadowRoot.getElementById('btnClearQueue').addEventListener('click', () => this._clearQueue());
     this.shadowRoot.getElementById('npRow').addEventListener('click', () => this._toggleQueue());
+    this.shadowRoot.getElementById('playingStrip').addEventListener('click', e => {
+      const it = e.target.closest('.pl-item');
+      if (it && it.dataset.entity) this._selectPlayer(it.dataset.entity, true);
+    });
     const volEl = this.shadowRoot.getElementById('volSlider');
     volEl.addEventListener('input', e => {
       const pct = e.target.value;
@@ -1078,7 +1116,153 @@ class MABrowserCard extends HTMLElement {
     if(!entities.length) entities=Object.values(this._hass.states).filter(e=>e.entity_id.startsWith('media_player.'));
     this._players=entities;
     sel.innerHTML=entities.length?entities.map(e=>`<option value="${e.entity_id}">${this._esc(e.attributes.friendly_name||e.entity_id)}</option>`).join(''):'<option value="">No players found</option>';
-    if(entities.length){this._selectedPlayer=entities[0].entity_id;sel.value=this._selectedPlayer;}
+    if(entities.length){
+      const keep=entities.find(e=>e.entity_id===this._selectedPlayer);
+      this._selectedPlayer=keep?keep.entity_id:entities[0].entity_id;
+      sel.value=this._selectedPlayer;
+    }
+    this._autoFollow();
+  }
+
+  // ── PLAYER SELECTION / AUTO-FOLLOW ────────────────────────────
+  // manual=true marks a user choice, which blocks auto-follow for
+  // manual_hold_minutes (0 = until reload).
+  _selectPlayer(id, manual) {
+    if(!id) return;
+    const changed = id !== this._selectedPlayer;
+    this._selectedPlayer = id;
+    const sel = this._$('playerSel'); if(sel) sel.value = id;
+    if(manual) this._manualAt = Date.now();
+    if(changed) {
+      this._lastNpKey = ''; this._maQueueState = null;
+      if(this._queueVisible) { this._hideQueue(); this._showQueue(); }
+      this._updateNowPlaying();
+    }
+  }
+  _manualActive() {
+    if(!this._manualAt) return false;
+    const raw = this._config.manual_hold_minutes;
+    let mins = (raw === undefined || raw === null || raw === '') ? 5 : Number(raw);
+    if(!(mins >= 0)) mins = 5;
+    if(mins === 0) return true;
+    if(Date.now() - this._manualAt < mins * 60000) return true;
+    this._manualAt = 0; return false;
+  }
+  _playerAreaId(entityId) {
+    const h = this._hass; const ent = h.entities?.[entityId];
+    if(ent?.area_id) return ent.area_id;
+    const dev = ent?.device_id ? h.devices?.[ent.device_id] : null;
+    return dev?.area_id || null;
+  }
+  _matchArea(value) {
+    if(!value) return null;
+    const s = String(value).trim().toLowerCase(); const areas = this._hass.areas || {};
+    if(!Object.keys(areas).length) return s;
+    if(areas[s]) return s;
+    for(const [id, a] of Object.entries(areas)) if((a.name||'').toLowerCase() === s) return id;
+    return null;
+  }
+  // The area of the device running this dashboard. In order: `area` config,
+  // ?area= in the URL, then Browser Mod's browser ID (matched against its entities).
+  _findAppArea() {
+    const h = this._hass;
+    let explicit = this._config.area;
+    if(!explicit) { try { explicit = new URLSearchParams(location.search).get('area'); } catch(_) {} }
+    if(explicit) return this._matchArea(explicit);
+    const bid = window.browser_mod?.browserID;
+    if(bid && h.entities) {
+      const slug = String(bid).toLowerCase().replace(/[^a-z0-9]+/g, '_');
+      for(const e of Object.values(h.entities)) {
+        if(!e.entity_id || !e.entity_id.includes(slug)) continue;
+        const area = e.area_id || (e.device_id ? h.devices?.[e.device_id]?.area_id : null);
+        if(area) return area;
+      }
+    }
+    return null;
+  }
+  _appAreaId() {
+    if(!this._hass) return null;
+    if(this._areaTs && Date.now() - this._areaTs < 60000) return this._areaId;
+    this._areaTs = Date.now(); this._areaId = this._findAppArea();
+    return this._areaId;
+  }
+  // A sync group is represented once: key = group leader (first of group_members).
+  _groupInfo(id, ids) {
+    const gm = this._hass.states[id]?.attributes?.group_members;
+    if(Array.isArray(gm) && gm.length > 1) {
+      const key = gm[0];
+      const rep = ids.includes(key) ? key : (gm.find(m => ids.includes(m)) || id);
+      return { key, rep, members: gm };
+    }
+    return { key: id, rep: id, members: [id] };
+  }
+  _playingGroups() {
+    const h = this._hass, ids = this._players.map(p => p.entity_id), seen = new Set(), out = [];
+    ids.forEach(id => {
+      if(h.states[id]?.state !== 'playing') return;
+      const g = this._groupInfo(id, ids);
+      if(seen.has(g.key)) return; seen.add(g.key); out.push(g);
+    });
+    return out;
+  }
+  _autoTarget() {
+    const h = this._hass, ids = this._players.map(p => p.entity_id);
+    if(!ids.length) return null;
+    const area = this._config.use_app_area === false ? null : this._appAreaId();
+    const inArea = list => !!area && list.some(id => this._playerAreaId(id) === area);
+    const playing = this._playingGroups();
+    if(playing.length) return (playing.find(g => inArea(g.members)) || playing[0]).rep;
+    // Nothing playing: stay on a paused player so it can be resumed.
+    const cur = this._selectedPlayer;
+    if(cur && h.states[cur]?.state === 'paused') return cur;
+    if(area) { const a = ids.find(id => inArea([id])); if(a) return a; }
+    const def = this._config.default_player;
+    if(def && ids.includes(def)) return def;
+    return ids[0];
+  }
+  _autoFollow() {
+    if(!this._hass) return;
+    if(this._players.length && this._config.auto_follow !== false && !this._manualActive()) {
+      const target = this._autoTarget();
+      if(target && target !== this._selectedPlayer) this._selectPlayer(target, false);
+    }
+    this._updatePlayingStrip();
+  }
+  _updatePlayingStrip() {
+    const el = this._$('playingStrip'); if(!el || !this._hass) return;
+    const h = this._hass;
+    // The selected player (or its sync group) is already shown in the player bar, so leave it out.
+    const groups = this._config.show_all_playing_players === false ? [] :
+      this._playingGroups().filter(g => !g.members.includes(this._selectedPlayer) && g.rep !== this._selectedPlayer);
+    const items = groups.map(g => {
+      const st = h.states[g.key] || h.states[g.rep];
+      const a = st?.attributes || {};
+      return {
+        rep: g.rep,
+        name: (h.states[g.rep]?.attributes.friendly_name || g.rep) + (g.members.length > 1 ? ` +${g.members.length - 1}` : ''),
+        art: this._imageUrl(a.entity_picture_local || a.entity_picture) || '',
+        track: [a.media_title, a.media_artist].filter(Boolean).join(' \u2013 '),
+        sel: g.members.includes(this._selectedPlayer),
+      };
+    });
+    const key = JSON.stringify(items);
+    if(key === this._lastStripKey) return;
+    this._lastStripKey = key;
+    el.style.display = items.length ? '' : 'none';
+    el.replaceChildren(...items.map(it => {
+      const row = document.createElement('div');
+      row.className = 'pl-item' + (it.sel ? ' selected' : '');
+      row.dataset.entity = it.rep; row.title = it.name;
+      const art = document.createElement('div'); art.className = 'pl-art';
+      if(it.art) art.style.backgroundImage = `url("${it.art.replace(/"/g, '%22')}")`;
+      else art.textContent = '\u266A';
+      const info = document.createElement('div'); info.className = 'pl-info';
+      const n = document.createElement('div'); n.className = 'pl-name'; n.textContent = it.name;
+      info.appendChild(n);
+      if(it.track) { const t = document.createElement('div'); t.className = 'pl-track'; t.textContent = it.track; info.appendChild(t); }
+      row.append(art, info);
+      return row;
+    }));
   }
 
   _nav(view,btn) {
@@ -1614,7 +1798,7 @@ class MABrowserCard extends HTMLElement {
   _startPoll() {
     clearInterval(this._pollTimer); clearInterval(this._progressTimer);
     this._updateNowPlaying();
-    this._pollTimer=setInterval(()=>this._updateNowPlaying(),2000);
+    this._pollTimer=setInterval(()=>{this._autoFollow();this._updateNowPlaying();},2000);
     this._progressTimer=setInterval(()=>this._tickProgress(),500);
   }
   _tickProgress() {
@@ -1750,7 +1934,7 @@ const DEFAULT_CUSTOM_COLORS = { accent:'#e5a00d', background:'#111113', surface:
 
 class MABrowserCardEditor extends HTMLElement {
   constructor(){super();this.attachShadow({mode:'open'});this._config={};this._pendingTimer=null;}
-  set hass(hass){this._hass=hass;}
+  set hass(hass){const first=!this._hass;this._hass=hass;if(first&&this._config&&Object.keys(this._config).length)this._render();}
   setConfig(config){this._config={...config};this._render();}
   _fire(config){clearTimeout(this._pendingTimer);this._pendingTimer=setTimeout(()=>{this.dispatchEvent(new CustomEvent('config-changed',{detail:{config},bubbles:true,composed:true}));},800);}
   _fireNow(config){clearTimeout(this._pendingTimer);this.dispatchEvent(new CustomEvent('config-changed',{detail:{config},bubbles:true,composed:true}));}
@@ -1766,6 +1950,10 @@ class MABrowserCardEditor extends HTMLElement {
     const sp=this._v('sidebar_position','left'),pp=this._v('player_position','bottom');
     const th=this._v('theme','auto'),ca=this._v('click_action','play'),st=this._v('show_title',true);
     const spc=this._v('show_podcasts',false),sab=this._v('show_audiobooks',false);
+    const mpOpts=Object.keys(this._hass?.states||{}).filter(e=>e.startsWith('media_player.')).sort()
+      .map(e=>({value:e,label:(this._hass.states[e].attributes.friendly_name||e)+' ('+e+')'}));
+    if(c.default_player&&!mpOpts.some(o=>o.value===c.default_player)) mpOpts.push({value:c.default_player,label:c.default_player});
+    mpOpts.unshift({value:'',label:'None (top of the list)'});
     const colorsEnabled=!!c.custom_colors;
     const ccVals={...DEFAULT_CUSTOM_COLORS,...(c.custom_colors||{})};
     this.shadowRoot.innerHTML='<style>'+EDITOR_CSS+'</style><div class="editor">'
@@ -1823,6 +2011,12 @@ class MABrowserCardEditor extends HTMLElement {
       +'<div class="hint" style="margin-bottom:10px;font-size:12px">Order sections appear in on the home screen, top to bottom (hidden sections above are simply skipped)</div>'
       +this._orderField('home_order',DEFAULT_HOME_ORDER,HOME_ORDER_LABELS)
       +'<div class="section-title">Players</div>'
+      +this._toggleField('auto_follow','Auto-follow playing player','Select whichever player is playing. If none, use the player in this device\u2019s area, else the top of the list',this._v('auto_follow',true))
+      +this._sliderField('manual_hold_minutes','Manual selection hold',this._v('manual_hold_minutes',5),0,60,1,'min','How long a manually chosen player overrides auto-follow. 0 = until the page is reloaded')
+      +this._toggleField('use_app_area','Use this device\u2019s area','When nothing is playing, select the first player in the same area as the device running this card',this._v('use_app_area',true))
+      +this._selectField('default_player','Default player',mpOpts,c.default_player||'','Used when nothing is playing and no area player applies')
+      +this._textField('area','Area override (optional)',c.area||'','e.g. kitchen','Area name or ID. Normally detected automatically; can also be set per device with ?area=kitchen on the dashboard URL')
+      +this._toggleField('show_all_playing_players','Show all playing players','Strip above the player bar listing everything playing, with artwork. Sync groups appear once',this._v('show_all_playing_players',true))
       +this._textField('players','Player entity IDs',(c.players||[]).join(', '),'Leave blank to auto-detect all MA players','Comma-separated e.g. media_player.kitchen, media_player.lounge')
       +'</div>';
     this._attachListeners();
@@ -1830,6 +2024,12 @@ class MABrowserCardEditor extends HTMLElement {
 
   _textField(id,label,value,placeholder,hint){return '<div class="field-row"><label>'+label+'</label><input type="text" id="'+id+'" value="'+this._esc(value)+'" placeholder="'+this._esc(placeholder)+'" />'+(hint?'<div class="hint">'+hint+'</div>':'')+'</div>';}
   _pwField(id,label,value,placeholder,hint){return '<div class="field-row"><label>'+label+'</label><input type="password" id="'+id+'" value="'+this._esc(value)+'" placeholder="'+this._esc(placeholder)+'" />'+(hint?'<div class="hint">'+hint+'</div>':'')+'</div>';}
+  _selectField(id,label,options,value,hint){
+    return '<div class="field-row"><label>'+label+'</label><select id="'+id+'">'+options.map(o=>'<option value="'+this._esc(o.value)+'"'+(o.value===value?' selected':'')+'>'+this._esc(o.label)+'</option>').join('')+'</select>'+(hint?'<div class="hint">'+hint+'</div>':'')+'</div>';
+  }
+  _toggleField(id,label,hint,checked){
+    return '<div class="toggle-row"><div><div class="toggle-label">'+label+'</div>'+(hint?'<div class="toggle-hint">'+hint+'</div>':'')+'</div><label class="toggle-switch"><input type="checkbox" id="'+id+'"'+(checked?' checked':'')+' /><span class="toggle-track"></span></label></div>';
+  }
   _sliderField(id,label,value,min,max,step,unit,hint){
     const isZero=(value===0&&min===0&&id.indexOf('sec_')===0);
     return '<div class="slider-row"><div class="slider-header"><span class="slider-label">'+label+'</span><input type="number" class="slider-number" id="'+id+'_num" min="'+min+'" max="'+max+'" step="'+step+'" value="'+value+'" />'+(unit?'<span class="slider-unit">'+unit+'</span>':'')+'</div><div class="range-wrap"><input type="range" id="'+id+'" min="'+min+'" max="'+max+'" step="'+step+'" value="'+value+'" /></div>'+(hint?'<div class="slider-hint">'+hint+'</div>':'')+(isZero?'<div class="zero-hint">&#x26A0; This section is hidden</div>':'')+'</div>';
@@ -1855,14 +2055,15 @@ class MABrowserCardEditor extends HTMLElement {
     sr.addEventListener('pointerdown',e=>e.stopPropagation());
     sr.addEventListener('mousedown',e=>e.stopPropagation());
     sr.addEventListener('touchstart',e=>e.stopPropagation(),{passive:true});
-    ['config_entry_id','ma_url','ma_addon_slug','title','subtitle','icon'].forEach(id=>{const el=sr.getElementById(id);if(el)el.addEventListener('change',()=>self._set(id,el.value.trim()||undefined));});
+    ['config_entry_id','ma_url','ma_addon_slug','title','subtitle','icon','area'].forEach(id=>{const el=sr.getElementById(id);if(el)el.addEventListener('change',()=>self._set(id,el.value.trim()||undefined));});
     const tokenEl=sr.getElementById('ma_token');if(tokenEl)tokenEl.addEventListener('change',()=>self._set('ma_token',tokenEl.value.trim()||undefined));
     const playersEl=sr.getElementById('players');if(playersEl)playersEl.addEventListener('change',()=>{const val=playersEl.value.trim();self._set('players',val?val.split(',').map(s=>s.trim()).filter(Boolean):undefined);});
-    ['sidebar_position','player_position','theme','click_action'].forEach(id=>{const el=sr.getElementById(id);if(el)el.addEventListener('change',()=>self._set(id,el.value));});
+    ['sidebar_position','player_position','theme','click_action','default_player'].forEach(id=>{const el=sr.getElementById(id);if(el)el.addEventListener('change',()=>self._set(id,el.value));});
     const showTitle=sr.getElementById('show_title');if(showTitle)showTitle.addEventListener('change',()=>self._set('show_title',showTitle.checked));
     const showPodcasts=sr.getElementById('show_podcasts');if(showPodcasts)showPodcasts.addEventListener('change',()=>self._set('show_podcasts',showPodcasts.checked));
+    ['auto_follow','use_app_area','show_all_playing_players'].forEach(id=>{const el=sr.getElementById(id);if(el)el.addEventListener('change',()=>self._set(id,el.checked));});
     const showAudiobooks=sr.getElementById('show_audiobooks');if(showAudiobooks)showAudiobooks.addEventListener('change',()=>self._set('show_audiobooks',showAudiobooks.checked));
-    ['height','sidebar_width','tile_size'].forEach(id=>{
+    ['height','sidebar_width','tile_size','manual_hold_minutes'].forEach(id=>{
       const slider=sr.getElementById(id),numBox=sr.getElementById(id+'_num');if(!slider||!numBox)return;
       slider.addEventListener('input',()=>{numBox.value=slider.value;self._set(id,+slider.value,false);});
       numBox.addEventListener('change',()=>{const v=Math.min(+slider.max,Math.max(+slider.min,+numBox.value));slider.value=v;numBox.value=v;self._set(id,v,true);});
