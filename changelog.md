@@ -1,5 +1,13 @@
 # MA Browser Card
 
+## V 3.11.0
+Auto select a playing player.
+Show all playing players.
+Set default player.
+Smart select player based on area.
+
+Updated Podcast and Audiobook icons.
+
 ## V 3.10.1
 Items in the player queue can now be selected to jump forwards or backwards.
 
