@@ -1,10 +1,16 @@
 # Music Assistant Browser Card
 
+
+[![Downloads](https://img.shields.io/github/downloads/PMizz13/ma-browser-card/total?style=for-the-badge)](https://github.com/PMizz13/ma-browser-card/releases)
+[![Stars](https://img.shields.io/github/stars/PMizz13/ma-browser-card?style=for-the-badge)](https://github.com/PMizz13/ma-browser-card/stargazers)
+[![Last Commit](https://img.shields.io/github/last-commit/PMizz13/ma-browser-card?style=for-the-badge)](https://github.com/PMizz13/ma-browser-card/commits)
+[![GitHub Release](https://img.shields.io/github/v/release/PMizz13/ma-browser-card?style=for-the-badge)](https://github.com/PMizz13/ma-browser-card/releases)
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20me-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/X2H427L1M4)
+
 A Music Assistant browser card for Home Assistant. Browse your music library - albums, artists, tracks, playlists and radio stations - with full artwork, search, queue view and playback controls, all within a single Lovelace card. This has been tested when your own media such as a Plex server is linked. I haven't tested it with all providers.
   
 ![MA Browser Card screenshot](screenshot.png)
 
-<a href='https://ko-fi.com/X2H427L1M4' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://storage.ko-fi.com/cdn/kofi6.png?v=6' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
 
 # Disclaimer
  **Use at your own risk.** This is a personal project shared freely with the community. It is not affiliated with, endorsed by, or supported by Music Assistant or Nabu Casa. I make no guarantees about stability, accuracy or fitness for any particular purpose, and take no responsibility for anything that may go wrong as a result of using it. Always back up your Home Assistant configuration before installing custom components.
