@@ -1,5 +1,5 @@
 /**
- * MA Browser Card  v3.11.0
+ * MA Browser Card  v3.11.1
  * A full-featured Music Assistant browser card for Home Assistant
  * GitHub: https://github.com/PMizz13/ma-browser-card
  *
@@ -1197,14 +1197,24 @@ class MABrowserCard extends HTMLElement {
     return { key: id, rep: id, members: [id] };
   }
   _playingGroups() {
-    const h = this._hass, ids = this._players.map(p => p.entity_id), seen = new Set(), out = [];
-    ids.forEach(id => {
-      if(h.states[id]?.state !== 'playing') return;
-      const g = this._groupInfo(id, ids);
-      if(seen.has(g.key)) return; seen.add(g.key); out.push(g);
-    });
-    return out;
-  }
+  const h = this._hass, ids = this._players.map(p => p.entity_id);
+  const isGroup = id => h.states[id]?.attributes?.mass_player_type === 'group';
+  // Groups first, everything else keeps its original order
+  const ordered = [...ids.filter(isGroup), ...ids.filter(id => !isGroup(id))];
+  const covered = new Set(), seen = new Set(), out = [];
+  ordered.forEach(id => {
+    if (h.states[id]?.state !== 'playing' || covered.has(id)) return;
+    const gm = h.states[id].attributes.group_members || [];
+    const g = isGroup(id)
+      ? { key: id, rep: id, members: [id, ...gm] }   // the group itself is the one we select
+      : this._groupInfo(id, ids);                    // non-MA grouping behaves as before
+    if (seen.has(g.key)) return;
+    seen.add(g.key);
+    g.members.forEach(m => covered.add(m));
+    out.push(g);
+  });
+  return out;
+}
   _autoTarget() {
     const h = this._hass, ids = this._players.map(p => p.entity_id);
     if(!ids.length) return null;
