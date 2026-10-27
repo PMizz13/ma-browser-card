@@ -1,5 +1,5 @@
 /**
- * MA Browser Card  v3.11.1
+ * MA Browser Card  v3.11.2
  * A full-featured Music Assistant browser card for Home Assistant
  * GitHub: https://github.com/PMizz13/ma-browser-card
  *
@@ -100,6 +100,11 @@
  *     - podcasts
  *     - audiobooks
  *     - radio
+ *
+ *   # Lazy loading (optional)
+ *   page_size: 48                   # items fetched/rendered per batch while scrolling
+ *                                   #   (10-500, default 48). Applies to library views,
+ *                                   #   artist albums, and album/playlist/podcast tracks
  *
  *   # Players (optional — omit to auto-detect)
  *   players:
@@ -424,6 +429,7 @@ const CSS = `
   @keyframes shimmer { 0%,100% { opacity:.5; } 50% { opacity:1; } }
   /* STATE */
   .state-box { display:flex; flex-direction:column; align-items:center; justify-content:center; height:180px; gap:10px; color:var(--t3); text-align:center; padding:0 20px; }
+  .lazy-sentinel { display:flex; align-items:center; justify-content:center; padding:16px 0 8px; min-height:30px; }
   .spinner { width:22px; height:22px; border:2px solid var(--bg3); border-top-color:var(--gold); border-radius:50%; animation:spin .75s linear infinite; }
   @keyframes spin { to { transform:rotate(360deg); } }
   .err-txt { font-size:12px; line-height:1.6; color:var(--t2); }
@@ -669,8 +675,9 @@ class MABrowserCard extends HTMLElement {
   _$ = id => this.shadowRoot.getElementById(id);
   _scroll = () => this._$('scroll');
   _skeleton(count=8) { return `<div class="section"><div class="skeleton-grid">${Array.from({length:count},()=>`<div class="skel-card"><div class="skel-art"></div><div class="skel-line"></div><div class="skel-line short"></div></div>`).join('')}</div></div>`; }
-  _loading() { if (this._imgObserver) this._imgObserver.disconnect(); this._scroll().innerHTML = this._skeleton(); }
+  _loading() { this._lazyStop(); if (this._imgObserver) this._imgObserver.disconnect(); this._scroll().innerHTML = this._skeleton(); }
   _err(e, retryFn) {
+    this._lazyStop();
     const msg = this._esc(e?.message||String(e));
     this._scroll().innerHTML = `<div class="state-box"><div>&#x26A0;</div><div class="err-txt">${msg}</div>${retryFn?`<button class="retry-btn" id="retryBtn">Try again</button>`:''}</div>`;
     if (retryFn) { const btn=this._scroll().querySelector('#retryBtn'); if(btn) btn.addEventListener('click',retryFn); }
@@ -797,11 +804,92 @@ class MABrowserCard extends HTMLElement {
     const r=res.response??res; const items=r.items??(Array.isArray(r)?r:[]);
     this._libCache[key]={items,ts:Date.now()}; return items;
   }
-  async _search(query) {
+  // One page of the library. get_library supports offset, so views can be
+  // loaded a batch at a time instead of one big capped request.
+  async _fetchLibraryPage(mediaType, orderBy, limit, offset, favoritesOnly=false) {
+    const data={media_type:mediaType,order_by:orderBy,limit,offset}; if(favoritesOnly) data.favorite=true;
+    const res=await this._callService('get_library',data); if(!res) return [];
+    const r=res.response??res; return r.items??(Array.isArray(r)?r:[]);
+  }
+
+  // ── LAZY LOADING ──────────────────────────────────────────────
+  _pageSize() { const n=parseInt(this._config.page_size,10); return n>=10?Math.min(n,500):48; }
+  _lazyStop() {
+    if(this._lazyObs){this._lazyObs.disconnect();this._lazyObs=null;}
+    if(this._lazy){this._lazy.gone=true;this._lazy=null;}
+  }
+  // Fills the (single) .section currently in the scroll area a batch at a time.
+  //   items      array already in memory (may be empty; may be a shared cache array)
+  //   render     (item, index) => html
+  //   fetchMore  optional async (items) => {items, done}; called once everything in
+  //              memory has been rendered and the list isn't known to be complete
+  //   done       true if there is nothing further to fetch
+  //   onDone     optional callback when the list is known to be complete
+  _mountLazy({items, render, fetchMore=null, done=true, onDone=null}) {
+    this._lazyStop();
+    const section=this._scroll().querySelector('.section'); if(!section) return;
+    const wrap=section.lastElementChild; if(!wrap) return;
+    const badge=section.querySelector('.sec-count');
+    const st={items, rendered:0, done:done||!fetchMore, gone:false, pending:null, size:this._pageSize()};
+    this._lazy=st;
+    const sentinel=document.createElement('div'); sentinel.className='lazy-sentinel';
+    const spin=()=>{ sentinel.innerHTML='<div class="spinner"></div>'; };
+    spin(); section.appendChild(sentinel);
+    const updateBadge=()=>{ if(badge) badge.textContent=st.items.length+(st.done?'':'+'); };
+    const finish=()=>{
+      if(this._lazyObs&&this._lazy===st){this._lazyObs.disconnect();this._lazyObs=null;}
+      sentinel.remove(); updateBadge(); if(onDone) onDone();
+    };
+    const renderChunk=()=>{
+      const slice=st.items.slice(st.rendered,st.rendered+st.size);
+      if(!slice.length) return;
+      wrap.insertAdjacentHTML('beforeend',slice.map((it,i)=>render(it,st.rendered+i)).join(''));
+      st.rendered+=slice.length;
+      this._hydrateImages(); this._highlightNowPlaying();
+    };
+    const fetchOnce=()=>{
+      if(st.pending) return st.pending;
+      st.pending=(async()=>{
+        try {
+          const r=await fetchMore(st.items); if(st.gone) return;
+          if(r&&r.items&&r.items.length) st.items.push(...r.items);
+          if(!r||r.done||!(r.items&&r.items.length)) st.done=true;
+        } finally { st.pending=null; }
+      })();
+      return st.pending;
+    };
+    // Used by Play all / Shuffle all so they cover the whole list, not just what's loaded.
+    st.loadAll=async()=>{ while(!st.done&&!st.gone) await fetchOnce(); };
+    const next=async()=>{
+      if(st.gone||st.busy) return;
+      if(st.rendered<st.items.length) renderChunk();
+      else if(!st.done){
+        st.busy=true;
+        try { await fetchOnce(); if(st.gone) return; renderChunk(); }
+        catch(e) {
+          console.warn('[MA Card] load more failed:',e);
+          if(st.gone) return;
+          sentinel.innerHTML='<button class="retry-btn">Couldn\u2019t load more \u2014 tap to retry</button>';
+          sentinel.firstChild.addEventListener('click',()=>{ spin(); st.busy=false; next(); });
+          return;
+        } finally { st.busy=false; }
+      }
+      updateBadge();
+      if(st.rendered>=st.items.length&&st.done){ finish(); return; }
+      // If the sentinel is still on screen the observer won't fire again, so re-arm it.
+      if(this._lazyObs&&this._lazy===st){ this._lazyObs.unobserve(sentinel); this._lazyObs.observe(sentinel); }
+    };
+    this._lazyObs=new IntersectionObserver(entries=>{ if(entries.some(e=>e.isIntersecting)) next(); },{root:this._scroll(),rootMargin:'400px'});
+    renderChunk(); updateBadge();
+    if(st.rendered>=st.items.length&&st.done){ finish(); return; }
+    this._lazyObs.observe(sentinel);
+  }
+
+  async _search(query, limit=20, libraryOnly=false) {
     const media_type=['album','artist','track','radio','playlist'];
     if(this._config.show_podcasts) media_type.push('podcast');
     if(this._config.show_audiobooks) media_type.push('audiobook');
-    const res=await this._callService('search',{name:query,media_type,limit:20});
+    const res=await this._callService('search',{name:query,media_type,limit,...(libraryOnly?{library_only:true}:{})});
     return res?.response??res??{};
   }
   async _playMedia(uri, mediaType, enqueue='play') {
@@ -1358,30 +1446,63 @@ class MABrowserCard extends HTMLElement {
     } catch(e){this._err(e,()=>this._renderHome());}
   }
 
-  async _renderAlbums() {
-    const key='album:sort_name:500:false'; const cached=this._libCache[key];
-    if(cached){this._scroll().innerHTML=this._section('All Albums',cached.items.map(a=>this._albumCardHtml(a)).join(''),'album-grid',cached.items.length);this._hydrateImages();this._attachClickHandler();this._highlightNowPlaying();return;}
-    this._loading();
-    try{const items=await this._getLibrary('album','sort_name',500);this._scroll().innerHTML=this._section('All Albums',items.map(a=>this._albumCardHtml(a)).join(''),'album-grid',items.length);this._hydrateImages();this._attachClickHandler();this._highlightNowPlaying();}
-    catch(e){this._err(e,()=>this._renderAlbums());}
+  // Paged library view: loads one batch up front, then more as the user scrolls.
+  // Loaded pages are cached (same TTL as _getLibrary) so going back is instant.
+  async _renderLibraryList({title,mediaType,wrapClass,cardFn,favoritesOnly=false,retry}) {
+    const orderBy='sort_name', size=this._pageSize();
+    const key=`${mediaType}:${orderBy}:${favoritesOnly}:paged:${size}`;
+    let entry=this._libCache[key];
+    if(entry&&Date.now()-entry.ts>=this._libCacheTTL) entry=null;
+    if(entry) this._lazyStop(); else this._loading();
+    try {
+      if(!entry) {
+        const page=await this._fetchLibraryPage(mediaType,orderBy,size,0,favoritesOnly);
+        entry={items:page,offset:page.length,done:page.length<size,ts:Date.now()};
+        this._libCache[key]=entry;
+      }
+      this._scroll().innerHTML=this._section(title,'',wrapClass,entry.items.length);
+      this._attachClickHandler();
+      this._mountLazy({
+        items:entry.items, done:entry.done,
+        render:(it,i)=>cardFn(it,i),
+        fetchMore:async()=>{
+          const page=await this._fetchLibraryPage(mediaType,orderBy,size,entry.offset,favoritesOnly);
+          entry.offset+=page.length;
+          const seen=new Set(entry.items.map(i=>i.uri));
+          const fresh=page.filter(i=>!seen.has(i.uri));
+          // Short page or nothing new (e.g. offset ignored) means we've reached the end.
+          entry.done=page.length<size||!fresh.length;
+          return {items:fresh,done:entry.done};
+        },
+        onDone:()=>{ entry.done=true; }
+      });
+    } catch(e){ this._err(e,retry); }
   }
-  async _renderArtists() {
-    const key='artist:sort_name:500:false'; const cached=this._libCache[key];
-    if(cached){this._scroll().innerHTML=this._section('All Artists',cached.items.map(a=>this._artistCardHtml(a)).join(''),'artist-grid',cached.items.length);this._hydrateImages();this._attachClickHandler();return;}
-    this._loading();
-    try{const items=await this._getLibrary('artist','sort_name',500);this._scroll().innerHTML=this._section('All Artists',items.map(a=>this._artistCardHtml(a)).join(''),'artist-grid',items.length);this._hydrateImages();this._attachClickHandler();}
-    catch(e){this._err(e,()=>this._renderArtists());}
-  }
-  async _renderArtistDetail(artistName,artUrl) {
+  async _renderAlbums() { return this._renderLibraryList({title:'All Albums',mediaType:'album',wrapClass:'album-grid',cardFn:a=>this._albumCardHtml(a),retry:()=>this._renderAlbums()}); }
+  async _renderArtists() { return this._renderLibraryList({title:'All Artists',mediaType:'artist',wrapClass:'artist-grid',cardFn:a=>this._artistCardHtml(a),retry:()=>this._renderArtists()}); }
+  async _renderArtistDetail(artistName,artUrl,uri) {
     this._loading();
     try {
-      const res=await this._search(artistName);
-      const albums=(res.albums??[]).filter(a=>this._artistName(a).toLowerCase().includes(artistName.toLowerCase()));
+      let albums=null;
+      // Preferred: ask MA for the artist's library albums directly (full list, no search cap).
+      const parsed=this._parseUri(uri);
+      if(parsed&&await this._waitForWS()){
+        try {
+          const r=await this._wsSend('music/artists/artist_albums',{item_id:parsed.item_id,provider_instance_id_or_domain:parsed.provider,in_library_only:true});
+          albums=Array.isArray(r)?r:(r?.items??[]);
+        } catch(e) { console.warn('[MA Card] artist_albums failed, falling back to search:',e.message); }
+      }
+      // Fallback (no ma_token / lookup failed): library-only search, with a much larger limit.
+      if(!albums){
+        const res=await this._search(artistName,100,true);
+        albums=(res.albums??[]).filter(a=>this._artistName(a).toLowerCase().includes(artistName.toLowerCase()));
+      }
       const ph=this._placeholder('artist');
       const artAttrs=artUrl?`data-img="${this._esc(artUrl)}" data-placeholder-type="artist"`:'';
-      this._scroll().innerHTML=`<div class="artist-hdr"><div class="artist-hero" ${artAttrs}>${ph}</div><div><div class="artist-detail-name">${this._esc(artistName)}</div><button class="artist-detail-back" data-action="back">&#x2190; Back</button></div></div>${albums.length?this._section('Albums',albums.map(a=>this._albumCardHtml(a)).join(''),'album-grid'):'<div class="state-box">No albums found</div>'}`;
+      this._scroll().innerHTML=`<div class="artist-hdr"><div class="artist-hero" ${artAttrs}>${ph}</div><div><div class="artist-detail-name">${this._esc(artistName)}</div><button class="artist-detail-back" data-action="back">&#x2190; Back</button></div></div>${albums.length?this._section('Albums','','album-grid',albums.length):'<div class="state-box">No albums found</div>'}`;
       this._hydrateImages(); this._attachClickHandler();
-    } catch(e){this._err(e,()=>this._renderArtistDetail(artistName,artUrl));}
+      if(albums.length) this._mountLazy({items:albums,render:a=>this._albumCardHtml(a)});
+    } catch(e){this._err(e,()=>this._renderArtistDetail(artistName,artUrl,uri));}
   }
   // MA URIs look like {provider_instance_id_or_domain}://{media_type}/{item_id}
   // e.g. "library://album/50" or "spotify://playlist/1a2b3c".
@@ -1403,8 +1524,25 @@ class MABrowserCard extends HTMLElement {
         return;
       }
       const command=type==='playlist'?'music/playlists/playlist_tracks':type==='podcast'?'music/podcasts/podcast_episodes':'music/albums/album_tracks';
-      const result=await this._wsSend(command,{item_id:parsed.item_id,provider_instance_id_or_domain:parsed.provider});
-      const tracks=Array.isArray(result)?result:(result?.items??[]);
+      const baseArgs={item_id:parsed.item_id,provider_instance_id_or_domain:parsed.provider};
+      const toList=r=>Array.isArray(r)?r:(r?.items??[]);
+      const tracks=toList(await this._wsSend(command,baseArgs));
+      // Playlists are paged by MA (page=0,1,2...); albums and podcasts return everything at once.
+      let fetchMore=null, done=true;
+      if(type==='playlist'){
+        const keyOf=t=>`${t.uri}|${t.position??''}`;
+        const seen=new Set(tracks.map(keyOf)); let page=0;
+        done=!tracks.length;
+        fetchMore=async()=>{
+          page++;
+          let r;
+          try { r=toList(await this._wsSend(command,{...baseArgs,page})); }
+          catch(e) { console.warn('[MA Card] playlist paging not available:',e.message); return {items:[],done:true}; }
+          const fresh=r.filter(t=>!seen.has(keyOf(t)));
+          r.forEach(t=>seen.add(keyOf(t)));
+          return {items:fresh,done:!fresh.length};
+        };
+      }
       const ph=this._placeholder(type);
       const artAttrs=artUrl?`data-img="${this._esc(artUrl)}" data-placeholder-type="${type}"`:'';
       const inAlbum=type==='album';
@@ -1416,41 +1554,16 @@ class MABrowserCard extends HTMLElement {
             <button class="artist-detail-back" data-action="back">&#x2190; Back</button>
           </div>
         </div>
-        ${tracks.length?this._section('Tracks',tracks.map((t,i)=>this._trackRowHtml(t,i+1,inAlbum,type==='podcast')).join(''),'track-list',tracks.length,this._sectionActions(tracks)):'<div class="state-box">No tracks found</div>'}`;
+        ${tracks.length?this._section('Tracks','','track-list',tracks.length,this._sectionActions(tracks,!!fetchMore)):'<div class="state-box">No tracks found</div>'}`;
       this._hydrateImages(); this._attachClickHandler();
+      if(tracks.length) this._mountLazy({items:tracks,done,fetchMore,render:(t,i)=>this._trackRowHtml(t,i+1,inAlbum,type==='podcast')});
     } catch(e){this._err(e,()=>this._renderContentDetail(uri,type,name,artist,artUrl));}
   }
-  async _renderTracks() {
-    this._loading();
-    try{const items=await this._getLibrary('track','sort_name',500);this._scroll().innerHTML=this._section('All Tracks',items.map((t,i)=>this._trackRowHtml(t,i+1)).join(''),'track-list',items.length);this._hydrateImages();this._attachClickHandler();}
-    catch(e){this._err(e,()=>this._renderTracks());}
-  }
-  async _renderPlaylists() {
-    this._loading();
-    try{const items=await this._getLibrary('playlist','sort_name',500);this._scroll().innerHTML=this._section('Playlists',items.map(a=>this._albumCardHtml(a,'playlist')).join(''),'album-grid',items.length);this._hydrateImages();this._attachClickHandler();}
-    catch(e){this._err(e,()=>this._renderPlaylists());}
-  }
-  async _renderPodcasts() {
-    const key='podcast:sort_name:500:false'; const cached=this._libCache[key];
-    if(cached){this._scroll().innerHTML=this._section('Podcasts',cached.items.map(a=>this._albumCardHtml(a,'podcast')).join(''),'album-grid',cached.items.length);this._hydrateImages();this._attachClickHandler();return;}
-    this._loading();
-    try{const items=await this._getLibrary('podcast','sort_name',500);this._scroll().innerHTML=this._section('Podcasts',items.map(a=>this._albumCardHtml(a,'podcast')).join(''),'album-grid',items.length);this._hydrateImages();this._attachClickHandler();}
-    catch(e){this._err(e,()=>this._renderPodcasts());}
-  }
-  async _renderAudiobooks() {
-    const key='audiobook:sort_name:500:false'; const cached=this._libCache[key];
-    if(cached){this._scroll().innerHTML=this._section('Audiobooks',cached.items.map(a=>this._albumCardHtml(a,'audiobook')).join(''),'album-grid',cached.items.length);this._hydrateImages();this._attachClickHandler();return;}
-    this._loading();
-    try{const items=await this._getLibrary('audiobook','sort_name',500);this._scroll().innerHTML=this._section('Audiobooks',items.map(a=>this._albumCardHtml(a,'audiobook')).join(''),'album-grid',items.length);this._hydrateImages();this._attachClickHandler();}
-    catch(e){this._err(e,()=>this._renderAudiobooks());}
-  }
-  async _renderRadio() {
-    const key='radio:sort_name:5000:true'; const cached=this._libCache[key];
-    if(cached){this._scroll().innerHTML=this._section('Radio Stations',cached.items.map(a=>this._radioCardHtml(a)).join(''),'radio-grid',cached.items.length);this._hydrateImages();this._attachClickHandler();return;}
-    this._loading();
-    try{const items=await this._getLibrary('radio','sort_name',5000,true);this._scroll().innerHTML=this._section('Radio Stations',items.map(a=>this._radioCardHtml(a)).join(''),'radio-grid',items.length);this._hydrateImages();this._attachClickHandler();}
-    catch(e){this._err(e,()=>this._renderRadio());}
-  }
+  async _renderTracks() { return this._renderLibraryList({title:'All Tracks',mediaType:'track',wrapClass:'track-list',cardFn:(t,i)=>this._trackRowHtml(t,i+1),retry:()=>this._renderTracks()}); }
+  async _renderPlaylists() { return this._renderLibraryList({title:'Playlists',mediaType:'playlist',wrapClass:'album-grid',cardFn:a=>this._albumCardHtml(a,'playlist'),retry:()=>this._renderPlaylists()}); }
+  async _renderPodcasts() { return this._renderLibraryList({title:'Podcasts',mediaType:'podcast',wrapClass:'album-grid',cardFn:a=>this._albumCardHtml(a,'podcast'),retry:()=>this._renderPodcasts()}); }
+  async _renderAudiobooks() { return this._renderLibraryList({title:'Audiobooks',mediaType:'audiobook',wrapClass:'album-grid',cardFn:a=>this._albumCardHtml(a,'audiobook'),retry:()=>this._renderAudiobooks()}); }
+  async _renderRadio() { return this._renderLibraryList({title:'Radio Stations',mediaType:'radio',wrapClass:'radio-grid',cardFn:a=>this._radioCardHtml(a),favoritesOnly:true,retry:()=>this._renderRadio()}); }
 
   async _playAll(items,shuffle) {
     if(!items.length||!this._selectedPlayer){if(!this._selectedPlayer)alert('Select a player first');return;}
@@ -1459,10 +1572,11 @@ class MABrowserCard extends HTMLElement {
     for(let i=1;i<items.length;i++) await this._hass.callService('music_assistant','play_media',{entity_id:this._selectedPlayer,media_id:items[i].uri,media_type:items[i].media_type||'album',enqueue:'add'});
     this._lastNpKey='';
   }
-  _sectionActions(items) {
+  _sectionActions(items, lazy=false) {
     if(!items.length) return '';
     const encoded=this._esc(JSON.stringify(items.map(i=>({uri:i.uri,media_type:i.media_type||'album'}))));
-    return `<button class="sec-btn" data-action="play-all" data-items="${encoded}">&#x25B6;&#xFE0E; Play all</button><button class="sec-btn" data-action="shuffle-all" data-items="${encoded}">&#x21C4;&#xFE0E; Shuffle all</button>`;
+    const lz=lazy?' data-lazy="1"':'';
+    return `<button class="sec-btn" data-action="play-all" data-items="${encoded}"${lz}>&#x25B6;&#xFE0E; Play all</button><button class="sec-btn" data-action="shuffle-all" data-items="${encoded}"${lz}>&#x21C4;&#xFE0E; Shuffle all</button>`;
   }
   _section(title,inner,wrapClass,count,actions) {
     const badge=count!==undefined?`<span class="sec-count">${count}</span>`:'';
@@ -1636,7 +1750,7 @@ class MABrowserCard extends HTMLElement {
           return;
         }
         if(type==='artist'){
-          this._renderArtistDetail(cardEl.dataset.name,cardEl.dataset.art);
+          this._renderArtistDetail(cardEl.dataset.name,cardEl.dataset.art,cardEl.dataset.uri);
           return;
         }
       }
@@ -1644,7 +1758,18 @@ class MABrowserCard extends HTMLElement {
       return;
     }
     const trackEl=e.target.closest('.track-row'); if(trackEl&&trackEl.dataset.uri){this._playMedia(trackEl.dataset.uri,'track');return;}
-    const secBtn=e.target.closest('.sec-btn'); if(secBtn){this._playAll(JSON.parse(secBtn.dataset.items||'[]'),secBtn.dataset.action==='shuffle-all');return;}
+    const secBtn=e.target.closest('.sec-btn'); if(secBtn){
+      (async()=>{
+        let items=JSON.parse(secBtn.dataset.items||'[]');
+        // Lazily-loaded lists: finish loading first so "all" really means all.
+        if(secBtn.dataset.lazy&&this._lazy){
+          try { await this._lazy.loadAll(); } catch(err) { console.warn('[MA Card] loading full list failed:',err); }
+          if(this._lazy) items=this._lazy.items.map(i=>({uri:i.uri,media_type:i.media_type||'track'}));
+        }
+        this._playAll(items,secBtn.dataset.action==='shuffle-all');
+      })();
+      return;
+    }
     const backEl=e.target.closest('[data-action="back"]'); if(backEl){this._renderView(this._view);return;}
   }
   _handleCtx(e) {
@@ -1667,7 +1792,7 @@ class MABrowserCard extends HTMLElement {
     menu.querySelectorAll('.ctx-item').forEach(item=>item.addEventListener('click',e=>{
       e.stopPropagation();
       if(item.dataset.browse){
-        if(type==='artist') this._renderArtistDetail(name,artUrl);
+        if(type==='artist') this._renderArtistDetail(name,artUrl,uri);
         else this._renderContentDetail(uri,type,name,artist,artUrl);
       }
       else this._playMedia(uri,type,item.dataset.enqueue);
@@ -1866,6 +1991,7 @@ class MABrowserCard extends HTMLElement {
     this._stopMA();
     clearInterval(this._pollTimer);clearInterval(this._progressTimer);clearTimeout(this._searchTimer);
     if(this._imgObserver){this._imgObserver.disconnect();this._imgObserver=null;}
+    this._lazyStop();
     if(this._ws){this._ws.onclose=null;this._ws.close();this._ws=null;}
     this._imgCache={};this._libCache={};
     document.removeEventListener('click',this._boundDismissCtx);
