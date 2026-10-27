@@ -1,5 +1,11 @@
 # MA Browser Card
 
+## V 3.11.2
+Changed loading to lazy loading for better performance and removing caps
+
+## V3.11.1
+Fixed a bug with the way player groups were treated
+
 ## V 3.11.0
 Auto select a playing player.
 Show all playing players.
