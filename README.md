@@ -43,9 +43,9 @@ A Music Assistant browser card for Home Assistant. Browse your music library - a
 - [Music Assistant](https://music-assistant.io/) server (v2.8+)
 - Music Assistant Home Assistant integration installed
 
-## Installation via HACS - Reccomended
+## Installation via Marketplace (formerly HACS) - Reccomended
 
-Search for MA Browser Card in the HACS store. Or click the button below.
+Search for MA Browser Card in the Marketplace (formerly HACS) store. Or click the button below.
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=PMizz13&repository=ma-browser-card&category=plugin)
 
@@ -313,7 +313,7 @@ There is a known bug in Music Assistant where certain players do not track playe
 Check the browser console (F12) for errors. Make sure the resource is registered as a JavaScript Module (not a regular JS file).
 
 - **Local JavaScript changes do not appear**
-HACS may serve `ma-browser-card.js.gz` instead of the edited `.js` file. When
+Marketplace (formerly HACS) may serve `ma-browser-card.js.gz` instead of the edited `.js` file. When
 manually testing a patch, remove or rename the old `.gz` alongside it, then reload
 the dashboard. Keep only one resource registration for the card. See the
 [HACS dashboard documentation](https://www.hacs.xyz/docs/use/repositories/type/dashboard/).
