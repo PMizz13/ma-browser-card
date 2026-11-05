@@ -1,5 +1,8 @@
 # MA Browser Card
 
+## V 3.11.3
+Fixed an issue where wrong players were selected after a restart and not refreshed properly
+
 ## V 3.11.2
 Changed loading to lazy loading for better performance and removing caps
 
