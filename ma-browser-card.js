@@ -1,5 +1,5 @@
 /**
- * MA Browser Card  v3.11.2
+ * MA Browser Card  v3.11.3
  * A full-featured Music Assistant browser card for Home Assistant
  * GitHub: https://github.com/PMizz13/ma-browser-card
  *
@@ -483,6 +483,9 @@ class MABrowserCard extends HTMLElement {
     this._ws = null; this._wsReady = false; this._wsMsgId = 100; this._wsPending = {};
     this._maQueueState = null; this._progressTimer = null;
     this._manualAt = 0; this._areaId = null; this._areaTs = 0; this._lastStripKey = '';
+    // True while the player list is the "any media_player" last-resort fallback
+    // (i.e. no configured or Music Assistant players exist yet).
+    this._playersAreFallback = false; this._staleCheckAt = 0;
   }
 
   setConfig(config) {
@@ -503,7 +506,26 @@ class MABrowserCard extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
     if (!this._built) { this._build(); this._built = true; this._init(); }
-    else if (this._players.length === 0) this._loadPlayers();
+    else if (this._players.length === 0 || this._playersStale()) this._loadPlayers();
+  }
+
+  // True when a player that belongs in the list has appeared since it was built
+  // (e.g. MA's entities registering after a Home Assistant restart).
+  //  - players: configured  -> only when a configured entity newly exists in hass.states,
+  //    so there is no rebuild loop while it is still missing.
+  //  - auto-detect mode     -> scans for an MA-looking player not in the list,
+  //    throttled to once every 2 seconds because hass updates very frequently.
+  _playersStale() {
+    const h = this._hass; if (!h) return false;
+    const cur = new Set(this._players.map(p => p.entity_id));
+    const cfg = this._config.players;
+    if (cfg?.length) return cfg.some(id => h.states[id] && !cur.has(id));
+    const now = Date.now(); if (this._staleCheckAt && now - this._staleCheckAt < 2000) return false;
+    this._staleCheckAt = now;
+    return Object.values(h.states).some(e => {
+      if (!e.entity_id.startsWith('media_player.') || cur.has(e.entity_id)) return false;
+      const a = e.attributes; return a.app_id === 'music_assistant' || a.mass_player_type || a.active_queue;
+    });
   }
 
   _hexToRgba(hex, alpha) {
@@ -894,6 +916,9 @@ class MABrowserCard extends HTMLElement {
   }
   async _playMedia(uri, mediaType, enqueue='play') {
     if(!this._selectedPlayer){alert('Select a player first');return;}
+    // Still on the "any media_player" fallback list (MA players haven't appeared yet):
+    // music_assistant.play_media would silently do nothing, so tell the user instead.
+    if(this._playersAreFallback){this._toast('Waiting for Music Assistant players\u2026');return;}
     const isShuffle    = enqueue === 'shuffle';
     const isShuffleAdd = enqueue === 'shuffle_add';
     const isPlayNow    = enqueue === 'play' || isShuffle;
@@ -1201,13 +1226,19 @@ class MABrowserCard extends HTMLElement {
     const sel=this._$('playerSel'); let entities=[];
     if(this._config.players?.length) entities=this._config.players.map(eid=>this._hass.states[eid]).filter(Boolean);
     if(!entities.length) entities=Object.values(this._hass.states).filter(e=>{if(!e.entity_id.startsWith('media_player.'))return false;const a=e.attributes;return a.app_id==='music_assistant'||a.mass_player_type||a.active_queue;});
-    if(!entities.length) entities=Object.values(this._hass.states).filter(e=>e.entity_id.startsWith('media_player.'));
+    // Last resort: any media_player. Flag it so playback can be guarded until
+    // real MA players appear (at which point _playersStale() triggers a rebuild).
+    let usedFallback=false;
+    if(!entities.length){
+      entities=Object.values(this._hass.states).filter(e=>e.entity_id.startsWith('media_player.'));
+      usedFallback=entities.length>0;
+    }
+    this._playersAreFallback=usedFallback;
     this._players=entities;
     sel.innerHTML=entities.length?entities.map(e=>`<option value="${e.entity_id}">${this._esc(e.attributes.friendly_name||e.entity_id)}</option>`).join(''):'<option value="">No players found</option>';
     if(entities.length){
       const keep=entities.find(e=>e.entity_id===this._selectedPlayer);
-      this._selectedPlayer=keep?keep.entity_id:entities[0].entity_id;
-      sel.value=this._selectedPlayer;
+      this._selectPlayer(keep?keep.entity_id:entities[0].entity_id, false);
     }
     this._autoFollow();
   }
@@ -1567,6 +1598,8 @@ class MABrowserCard extends HTMLElement {
 
   async _playAll(items,shuffle) {
     if(!items.length||!this._selectedPlayer){if(!this._selectedPlayer)alert('Select a player first');return;}
+    // Same guard as _playMedia: don't fire music_assistant.play_media at a non-MA fallback player.
+    if(this._playersAreFallback){this._toast('Waiting for Music Assistant players\u2026');return;}
     if(shuffle) await this._hass.callService('media_player','shuffle_set',{entity_id:this._selectedPlayer,shuffle:true});
     await this._hass.callService('music_assistant','play_media',{entity_id:this._selectedPlayer,media_id:items[0].uri,media_type:items[0].media_type||'album',enqueue:'play'});
     for(let i=1;i<items.length;i++) await this._hass.callService('music_assistant','play_media',{entity_id:this._selectedPlayer,media_id:items[i].uri,media_type:items[i].media_type||'album',enqueue:'add'});
