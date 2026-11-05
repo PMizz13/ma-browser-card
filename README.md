@@ -43,7 +43,7 @@ A Music Assistant browser card for Home Assistant. Browse your music library - a
 - [Music Assistant](https://music-assistant.io/) server (v2.8+)
 - Music Assistant Home Assistant integration installed
 
-## Installation via Marketplace (formerly HACS) - Reccomended
+## Installation via Marketplace (formerly HACS) - Recommended
 
 Search for MA Browser Card in the Marketplace (formerly HACS) store. Or click the button below.
 
