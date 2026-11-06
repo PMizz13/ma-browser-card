@@ -1,5 +1,5 @@
 /**
- * MA Browser Card  v3.9.0
+ * MA Browser Card  v3.11.3
  * A full-featured Music Assistant browser card for Home Assistant
  * GitHub: https://github.com/PMizz13/ma-browser-card
  *
@@ -15,12 +15,15 @@
  *
  *   # Required
  *   config_entry_id: 01JXXX...
- *   #   Settings \u2192 Devices & Services \u2192 Devices \u2192 Music Assistant \u2192
- *   #   click the \u22EE (three-dot) menu \u2192 Copy entity ID
+ *   #   Settings \u2192 Devices & Services \u2192 Music Assistant integration \u2192
+ *   #   click the \u22EE (three-dot) menu \u2192 Copy entry ID
  *   ma_url: http://192.168.1.x:8095
+ *   ma_addon_slug: d5369777_music_assistant  # optional: route via HA ingress
  *
  *   # Recommended
- *   ma_token: eyJ...                # enables Recently Played / Recently Added
+ *   ma_token: eyJ...                # enables Recently Played / Recently Added,
+ *                                   # Browse, Queue view (click a row to jump to
+ *                                   # that track) and Add/Remove favourites
  *
  *   # Layout
  *   height: 580
@@ -35,6 +38,15 @@
  *   title: Music
  *   subtitle: Music Assistant
  *   icon: mdi:music
+ *   custom_colors:                  # optional — overrides the theme's palette
+ *     accent: "#e5a00d"             #   highlights, play button, active states
+ *     background: "#111113"        #   outer card background
+ *     surface: "#222228"           #   sidebar, artwork placeholders, controls
+ *     elevated: "#2e2e38"          #   hover/active backgrounds
+ *     text: "#f0f0f5"              #   primary text
+ *     text_nav: "#9898aa"    #   nav button colours
+ *     other_text: "#55555f"        # other/tertiary text
+ *     border: "#ffffff12"          # borders and dividers
  *
  *   # Behaviour
  *   click_action: play              # play | enqueue | browse
@@ -42,7 +54,9 @@
  *                                    #   of playing immediately (artists already do this).
  *                                    #   Right-click / long-press always shows the full menu,
  *                                    #   which also includes "Browse tracks" for albums and
- *                                    #   playlists regardless of this setting.
+ *                                    #   playlists regardless of this setting. With ma_token set
+ *                                    #   it also offers "Add to favourites" / "Remove from
+ *                                    #   favourites" (whichever applies) for items MA can favourite.
  *
  *   # Optional content types (off by default)
  *   show_podcasts: false
@@ -62,10 +76,56 @@
  *                               # favourited podcasts for their next unfinished episode
  *     continue_audiobooks: 10   # requires show_audiobooks + ma_token
  *
+ *   # Order sections appear in on the home screen (top to bottom).
+ *   # Omit to use the default order shown here.
+ *   home_order:
+ *     - continue_podcasts
+ *     - continue_audiobooks
+ *     - favourite_playlists
+ *     - favourite_albums
+ *     - favourite_artists
+ *     - favourite_tracks
+ *     - radio
+ *     - recently_played
+ *     - recently_added
+ *     - discover
+ *
+ *   # Order sections appear in on the search results screen.
+ *   # Omit to use the default order shown here.
+ *   search_order:
+ *     - albums
+ *     - artists
+ *     - tracks
+ *     - playlists
+ *     - podcasts
+ *     - audiobooks
+ *     - radio
+ *
+ *   # Lazy loading (optional)
+ *   page_size: 48                   # items fetched/rendered per batch while scrolling
+ *                                   #   (10-500, default 48). Applies to library views,
+ *                                   #   artist albums, and album/playlist/podcast tracks
+ *
  *   # Players (optional — omit to auto-detect)
  *   players:
  *     - media_player.kitchen
  *     - media_player.living_room
+ *
+ *   # Player selection
+ *   auto_follow: true               # select a currently playing player automatically
+ *                                   #   (several playing -> first in the list; a player in
+ *                                   #   this device's area wins if use_app_area is on)
+ *   manual_hold_minutes: 5          # how long a manual pick overrides auto_follow
+ *                                   #   (0 = until the page is reloaded)
+ *   use_app_area: true              # when nothing is playing, select the first player in
+ *                                   #   the same area as the device running this card
+ *   default_player: media_player.x  # optional: used when nothing is playing and no area
+ *                                   #   player applies (otherwise the top of the list)
+ *   area: kitchen                   # optional override for the detected area (area name or
+ *                                   #   ID). Also read from ?area=kitchen in the URL, or
+ *                                   #   detected via Browser Mod's browser ID.
+ *   show_all_playing_players: true  # strip above the player bar listing everything playing
+ *                                   #   (sync groups shown once)
  *
  * ───────────────────────────────────────────────────────────────────────
  */
@@ -119,7 +179,8 @@ const CSS = `
   .card.theme-retro .queue-art,.card.theme-retro .queue-item,
   .card.theme-retro .np-art,.card.theme-retro .artist-hero,
   .card.theme-retro .artist-detail-back,.card.theme-retro .skel-art,
-  .card.theme-retro .skel-line,.card.theme-retro .spinner { border-radius:0!important; }
+  .card.theme-retro .skel-line,.card.theme-retro .spinner,
+  .card.theme-retro .toast { border-radius:0!important; }
   .card.theme-retro { background:linear-gradient(160deg,#d8d4cc 0%,#c0bcb4 30%,#b8b4ac 60%,#c8c4bc 100%); }
   .card.theme-retro .logo { background:linear-gradient(180deg,#1a1a1a 0%,#222 100%); border-bottom:2px solid #000; padding:8px 13px; }
   .card.theme-retro .logo-icon { background:#cccc00; border-top:2px solid #ffff88; border-left:2px solid #ffff88; border-bottom:2px solid #666600; border-right:2px solid #666600; }
@@ -181,6 +242,7 @@ const CSS = `
   .card.theme-retro .ctx-item { color:#ccc; font-size:12px; }
   .card.theme-retro .ctx-item:hover { background:#000080; color:#fff; }
   .card.theme-retro .spinner { border-color:#888; border-top-color:#22cc00; }
+  .card.theme-retro .toast { background:#1a1a1a; color:#22cc00; border:2px solid #4a4a4a; }
   /* TOP SIDEBAR */
   .card.sidebar-top { flex-direction:column; }
   .card.sidebar-top .sidebar { width:100%; flex-direction:column; border-right:none; border-bottom:1px solid var(--border); flex-shrink:0; height:auto; }
@@ -248,6 +310,19 @@ const CSS = `
   .vol-slider { flex:1; -webkit-appearance:none; appearance:none; height:3px; border-radius:2px; outline:none; cursor:pointer; background:linear-gradient(to right,var(--gold) 0%,var(--gold) var(--vol-pct,50%),var(--bg3) var(--vol-pct,50%),var(--bg3) 100%); }
   .vol-slider::-webkit-slider-thumb { -webkit-appearance:none; width:13px; height:13px; border-radius:50%; background:var(--gold); cursor:pointer; }
   .vol-slider::-moz-range-thumb { width:13px; height:13px; border:none; border-radius:50%; background:var(--gold); cursor:pointer; }
+  /* PLAYING STRIP */
+  .playing-strip { display:flex; flex-direction:column; gap:3px; margin-bottom:10px; max-height:132px; overflow-y:auto; scrollbar-width:thin; scrollbar-color:var(--bg3) transparent; }
+  .pl-item { display:flex; align-items:center; gap:8px; padding:4px; border-radius:7px; cursor:pointer; border:1px solid transparent; min-width:0; transition:background .12s; }
+  .pl-item:hover { background:var(--bg2); }
+  .pl-item.selected { background:var(--gold-bg); border-color:var(--gold-border); }
+  .pl-art { width:32px; height:32px; border-radius:5px; background-color:var(--bg3); background-size:cover; background-position:center; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:14px; color:var(--t3); }
+  .pl-info { flex:1; min-width:0; }
+  .pl-name { font-size:11px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--t1); }
+  .pl-track { font-size:10px; color:var(--t3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px; }
+  .card.sidebar-top .playing-strip { flex:0 0 100%; flex-direction:row; overflow-x:auto; overflow-y:hidden; max-height:none; margin-bottom:0; }
+  .card.sidebar-top .pl-item { flex:0 0 auto; width:170px; }
+  .card.theme-retro .pl-item, .card.theme-retro .pl-art { border-radius:0!important; }
+  .card.theme-retro .pl-name { color:#22cc00; }
   /* MAIN */
   .main { flex:1; display:flex; flex-direction:column; overflow:hidden; min-width:0; }
   .topbar { display:flex; align-items:center; gap:9px; padding:10px 13px; border-bottom:1px solid var(--border); flex-shrink:0; }
@@ -312,6 +387,8 @@ const CSS = `
   .ctx-item { display:flex; align-items:center; gap:9px; padding:8px 11px; border-radius:6px; cursor:pointer; font-size:12.5px; color:var(--t1); transition:background .1s; }
   .ctx-item:hover { background:var(--bg3); }
   .ctx-ico { font-size:14px; width:18px; text-align:center; }
+  /* TOAST */
+  .toast { position:absolute; left:50%; bottom:70px; transform:translateX(-50%); background:var(--bg3); color:var(--t1); border:1px solid var(--gold-border); padding:8px 14px; border-radius:20px; font-size:12px; z-index:1000; box-shadow:0 4px 16px rgba(0,0,0,.5); max-width:80%; text-align:center; pointer-events:none; }
   /* QUEUE PANEL */
   .queue-panel { position:absolute; inset:0; background:var(--bg-sidebar); display:flex; flex-direction:column; z-index:10; animation:slideUp .2s ease; }
   @keyframes slideUp { from { transform:translateY(20px); opacity:0; } to { transform:none; opacity:1; } }
@@ -352,6 +429,7 @@ const CSS = `
   @keyframes shimmer { 0%,100% { opacity:.5; } 50% { opacity:1; } }
   /* STATE */
   .state-box { display:flex; flex-direction:column; align-items:center; justify-content:center; height:180px; gap:10px; color:var(--t3); text-align:center; padding:0 20px; }
+  .lazy-sentinel { display:flex; align-items:center; justify-content:center; padding:16px 0 8px; min-height:30px; }
   .spinner { width:22px; height:22px; border:2px solid var(--bg3); border-top-color:var(--gold); border-radius:50%; animation:spin .75s linear infinite; }
   @keyframes spin { to { transform:rotate(360deg); } }
   .err-txt { font-size:12px; line-height:1.6; color:var(--t2); }
@@ -361,6 +439,35 @@ const CSS = `
   .scroll .album-card, .scroll .track-row, .scroll .artist-card { -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
   .a-art-wrap, .ar-img, .tr-art { -webkit-touch-callout: none; }
 `;
+
+// Default ordering for home-dashboard sections and search-result sections,
+// plus their display labels — shared by the card (rendering) and the
+// editor (the reorder UI).
+const DEFAULT_HOME_ORDER = ['continue_podcasts','continue_audiobooks','favourite_playlists','favourite_albums','favourite_artists','favourite_tracks','radio','recently_played','recently_added','discover'];
+const DEFAULT_SEARCH_ORDER = ['albums','artists','tracks','playlists','podcasts','audiobooks','radio'];
+const HOME_ORDER_LABELS = {
+  continue_podcasts: 'Up Next \u2013 Podcasts', continue_audiobooks: 'Continue Listening \u2013 Audiobooks',
+  favourite_playlists: 'Favourite Playlists', favourite_albums: 'Favourite Albums', favourite_artists: 'Favourite Artists',
+  favourite_tracks: 'Favourite Tracks', radio: 'Radio Stations', recently_played: 'Recently Played',
+  recently_added: 'Recently Added', discover: 'Discover',
+};
+const SEARCH_ORDER_LABELS = { albums: 'Albums', artists: 'Artists', tracks: 'Tracks', playlists: 'Playlists', podcasts: 'Podcasts', audiobooks: 'Audiobooks', radio: 'Radio' };
+
+// Media types the context menu will consider for "Add to / Remove from
+// favourites". Podcast episodes are deliberately absent (MA only favourites
+// the show, not individual episodes). For anything listed here the option is
+// only shown if MA reports a boolean `favorite` flag on the item — items
+// without one are treated as "not favouritable" and the option is hidden.
+const FAVOURITABLE_TYPES = ['artist','album','track','playlist','radio','podcast','audiobook'];
+
+// Given a configured order array (may be missing/short/stale), returns a
+// complete, de-duplicated order covering every known key — falls back to
+// defaultOrder and appends any keys the person's saved order left out.
+function resolveOrder(configured, defaultOrder, labels) {
+  const order = (configured && configured.length ? configured : defaultOrder).filter(k => labels[k]);
+  defaultOrder.forEach(k => { if (!order.includes(k)) order.push(k); });
+  return order;
+}
 
 class MABrowserCard extends HTMLElement {
   constructor() {
@@ -375,20 +482,57 @@ class MABrowserCard extends HTMLElement {
     this._queueVisible = false; this._ctxMenu = null;
     this._ws = null; this._wsReady = false; this._wsMsgId = 100; this._wsPending = {};
     this._maQueueState = null; this._progressTimer = null;
+    this._manualAt = 0; this._areaId = null; this._areaTs = 0; this._lastStripKey = '';
+    // True while the player list is the "any media_player" last-resort fallback
+    // (i.e. no configured or Music Assistant players exist yet).
+    this._playersAreFallback = false; this._staleCheckAt = 0;
   }
 
   setConfig(config) {
-    if (!config.config_entry_id) throw new Error('ma-browser-card: config_entry_id is required.\nFind it in HA \u2192 Settings \u2192 Devices & Services \u2192 Devices \u2192 Music Assistant \u2192 click the \u22EE (three-dot) menu \u2192 Copy entity ID.');
-    if (!config.ma_url) throw new Error('ma-browser-card: ma_url is required.\nSet it to your Music Assistant URL, e.g. http://192.168.1.x:8095');
+    if (!config.config_entry_id) throw new Error('ma-browser-card: config_entry_id is required.\nFind it in HA \u2192 Settings \u2192 Devices & Services \u2192 Music Assistant integration \u2192 three-dot menu \u2192 Copy entry ID.');
+    if (!config.ma_url && !config.ma_addon_slug) throw new Error('ma-browser-card: set ma_addon_slug for ingress, or ma_url for a direct connection.');
+    if (config.ma_addon_slug && !/^[a-zA-Z0-9_-]+$/.test(config.ma_addon_slug)) {
+      throw new Error('ma-browser-card: ma_addon_slug must be an add-on slug, not a URL.');
+    }
+    this._stopMA();
     this._config = config;
-    this._maUrl = config.ma_url.replace(/\/$/, '');
-    this._maToken = config.ma_token || '';
+    this._directMaUrl = (config.ma_url || '').replace(/\/$/, '');
+    this._maUrl = config.ma_addon_slug ? '' : this._directMaUrl;
+    this._maToken = (config.ma_token || '').trim();
+    this._imgCache = {}; this._libCache = {};
+    if (this._built && this.isConnected) this._init();
   }
 
   set hass(hass) {
     this._hass = hass;
     if (!this._built) { this._build(); this._built = true; this._init(); }
-    else if (this._players.length === 0) this._loadPlayers();
+    else if (this._players.length === 0 || this._playersStale()) this._loadPlayers();
+  }
+
+  // True when a player that belongs in the list has appeared since it was built
+  // (e.g. MA's entities registering after a Home Assistant restart).
+  //  - players: configured  -> only when a configured entity newly exists in hass.states,
+  //    so there is no rebuild loop while it is still missing.
+  //  - auto-detect mode     -> scans for an MA-looking player not in the list,
+  //    throttled to once every 2 seconds because hass updates very frequently.
+  _playersStale() {
+    const h = this._hass; if (!h) return false;
+    const cur = new Set(this._players.map(p => p.entity_id));
+    const cfg = this._config.players;
+    if (cfg?.length) return cfg.some(id => h.states[id] && !cur.has(id));
+    const now = Date.now(); if (this._staleCheckAt && now - this._staleCheckAt < 2000) return false;
+    this._staleCheckAt = now;
+    return Object.values(h.states).some(e => {
+      if (!e.entity_id.startsWith('media_player.') || cur.has(e.entity_id)) return false;
+      const a = e.attributes; return a.app_id === 'music_assistant' || a.mass_player_type || a.active_queue;
+    });
+  }
+
+  _hexToRgba(hex, alpha) {
+    const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || '');
+    if (!m) return hex;
+    const r = parseInt(m[1], 16), g = parseInt(m[2], 16), b = parseInt(m[3], 16);
+    return `rgba(${r},${g},${b},${alpha})`;
   }
 
   _build() {
@@ -406,7 +550,28 @@ class MABrowserCard extends HTMLElement {
     if (this._config.columns) this.style.gridColumn = `span ${this._config.columns}`;
     const classes = [themeClass, sidebarTop ? 'sidebar-top' : 'sidebar-left', playerTop ? 'player-top' : 'player-bottom'].filter(Boolean).join(' ');
 
+    // Custom colour overrides — layered on top of whichever theme is selected
+    // via inline CSS custom properties (inline style always wins over class rules).
+    const cc = this._config.custom_colors;
+    let colorVarsStyle = '';
+    if (cc) {
+      const varMap = { accent: '--gold', background: '--bg0', surface: '--bg2', elevated: '--bg3', text: '--t1', text_nav: '--t2', other_text: '--t3', border: '--border' };
+      const parts = [];
+      Object.keys(varMap).forEach(key => { if (cc[key]) parts.push(`${varMap[key]}:${cc[key]}`); });
+
+      if (cc.surface) {
+        parts.push(`--bg-sidebar:${cc.surface}`);
+        parts.push(`--bg-player:${cc.surface}`);
+      }
+      if (cc.accent) {
+        parts.push(`--gold-bg:${this._hexToRgba(cc.accent, 0.13)}`);
+        parts.push(`--gold-border:${this._hexToRgba(cc.accent, 0.25)}`);
+      }
+      if (parts.length) colorVarsStyle = ';' + parts.join(';');
+    }
+
     const playerBarHtml = `<div class="player-bar">
+        <div class="playing-strip" id="playingStrip" style="display:none"></div>
         <div class="np-row" id="npRow"><div class="np-art" id="npArt">&#9834;&#xFE0E;</div>
           <div class="np-info"><div class="np-title" id="npTitle">Nothing playing</div><div class="np-artist" id="npArtist">&mdash;</div></div></div>
         <div class="controls">
@@ -439,8 +604,8 @@ class MABrowserCard extends HTMLElement {
         <button class="nav-btn" data-view="artists"><span class="nav-ico">&#x266A;&#xFE0E;</span>Artists</button>
         <button class="nav-btn" data-view="tracks"><span class="nav-ico">&#x266B;&#xFE0E;</span>Tracks</button>
         <button class="nav-btn" data-view="playlists"><span class="nav-ico">&#x2630;&#xFE0E;</span>Playlists</button>
-        ${this._config.show_podcasts?`<button class="nav-btn" data-view="podcasts"><span class="nav-ico">&#x24C5;&#xFE0E;</span>Podcasts</button>`:''}
-        ${this._config.show_audiobooks?`<button class="nav-btn" data-view="audiobooks"><span class="nav-ico">&#x24B7;&#xFE0E;</span>Audiobooks</button>`:''}
+        ${this._config.show_podcasts?`<button class="nav-btn" data-view="podcasts"><span class="nav-ico">&#x1F399;&#xFE0E;</span>Podcasts</button>`:''}
+        ${this._config.show_audiobooks?`<button class="nav-btn" data-view="audiobooks"><span class="nav-ico">&#x1F56E;&#xFE0E;</span>Audiobooks</button>`:''}
       </nav>`;
 
     const outerLogo    = sidebarTop ? logoHtml : '';
@@ -452,7 +617,7 @@ class MABrowserCard extends HTMLElement {
       : '';
 
     this.shadowRoot.innerHTML = `<style>${CSS}</style>
-    <div class="card ${classes}" style="--card-height:${height}px;--sidebar:${sidebarWidth};--art-size:${tileSize}px">
+    <div class="card ${classes}" style="--card-height:${height}px;--sidebar:${sidebarWidth};--art-size:${tileSize}px${colorVarsStyle}">
       ${outerLogo}<div class="sidebar">${innerContent}</div>
       <div class="main">
         <div class="topbar"><div class="search-wrap">
@@ -482,7 +647,10 @@ class MABrowserCard extends HTMLElement {
     searchEl.addEventListener('keyup', searchHandler);
     searchEl.addEventListener('keydown', e => e.stopPropagation());
     clearBtn.addEventListener('click', () => { searchEl.value = ''; clearBtn.classList.remove('visible'); this._renderView(this._view); });
-    this.shadowRoot.getElementById('playerSel').addEventListener('change', e => { this._selectedPlayer = e.target.value || null; this._lastNpKey = ''; this._updateNowPlaying(); });
+    this.shadowRoot.getElementById('playerSel').addEventListener('change', e => {
+      const v = e.target.value;
+      if (v) this._selectPlayer(v, true); else this._selectedPlayer = null;
+    });
     this.shadowRoot.getElementById('btnPlay').addEventListener('click', () => this._togglePlay());
     this.shadowRoot.getElementById('btnPrev').addEventListener('click', () => this._playerCmd('previous'));
     this.shadowRoot.getElementById('btnNext').addEventListener('click', () => this._playerCmd('next'));
@@ -490,6 +658,10 @@ class MABrowserCard extends HTMLElement {
     this.shadowRoot.getElementById('btnRepeat').addEventListener('click', () => this._toggleRepeat());
     this.shadowRoot.getElementById('btnClearQueue').addEventListener('click', () => this._clearQueue());
     this.shadowRoot.getElementById('npRow').addEventListener('click', () => this._toggleQueue());
+    this.shadowRoot.getElementById('playingStrip').addEventListener('click', e => {
+      const it = e.target.closest('.pl-item');
+      if (it && it.dataset.entity) this._selectPlayer(it.dataset.entity, true);
+    });
     const volEl = this.shadowRoot.getElementById('volSlider');
     volEl.addEventListener('input', e => {
       const pct = e.target.value;
@@ -511,27 +683,45 @@ class MABrowserCard extends HTMLElement {
   }
 
   async _init() {
+    const generation = this._maGeneration;
     try {
+      await this._prepareMA();
+      if (!this.isConnected || generation !== this._maGeneration) return;
       this._loadPlayers(); this._connectMA();
-      await this._renderHome(); this._startPoll();
-      setTimeout(() => { if (this._players.length === 0) this._loadPlayers(); }, 3000);
-      setTimeout(async () => { if (this._wsReady && this._view === 'home') await this._renderHome(); }, 4000);
-    } catch(e) { this._err(e); }
+      await this._renderHome();
+      if (!this.isConnected || generation !== this._maGeneration) return;
+      this._startPoll();
+    } catch(e) { if (this.isConnected && generation === this._maGeneration) this._err(e); }
   }
 
   _$ = id => this.shadowRoot.getElementById(id);
   _scroll = () => this._$('scroll');
   _skeleton(count=8) { return `<div class="section"><div class="skeleton-grid">${Array.from({length:count},()=>`<div class="skel-card"><div class="skel-art"></div><div class="skel-line"></div><div class="skel-line short"></div></div>`).join('')}</div></div>`; }
-  _loading() { if (this._imgObserver) this._imgObserver.disconnect(); this._scroll().innerHTML = this._skeleton(); }
+  _loading() { this._lazyStop(); if (this._imgObserver) this._imgObserver.disconnect(); this._scroll().innerHTML = this._skeleton(); }
   _err(e, retryFn) {
-    const msg = e?.message||String(e);
+    this._lazyStop();
+    const msg = this._esc(e?.message||String(e));
     this._scroll().innerHTML = `<div class="state-box"><div>&#x26A0;</div><div class="err-txt">${msg}</div>${retryFn?`<button class="retry-btn" id="retryBtn">Try again</button>`:''}</div>`;
     if (retryFn) { const btn=this._scroll().querySelector('#retryBtn'); if(btn) btn.addEventListener('click',retryFn); }
   }
   _esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   _fmtDur(sec) { if(!sec) return''; return `${Math.floor(sec/60)}:${String(Math.floor(sec%60)).padStart(2,'0')}`; }
-  _artUrl(item) { if(!item) return null; return item.image||item.image_url||item.album?.image||item.album?.image_url||null; }
+  _artUrl(item) {
+    if(!item) return null;
+    const direct=this._imageUrl(item.image||item.image_url||item.album?.image||item.album?.image_url);
+    if(direct) return direct;
+    // Items from the direct MA WebSocket carry image as an object (or only metadata.images),
+    // not a URL string, so resolve those through the MA image proxy.
+    if(this._maUrl){
+      const viaMa=this._maItemArtUrl(item)||(item.album?this._maItemArtUrl(item.album):null);
+      if(viaMa) return viaMa;
+    }
+    return null;
+  }
   _artistName(item) { return item?.artists?.length ? item.artists.map(a=>a.name).join(', ') : ''; }
+  // Favourite state carried on the rendered element so the context menu can
+  // be contextual without another lookup. Absent = MA didn't report one.
+  _favAttr(item) { return typeof item?.favorite==='boolean' ? ` data-fav="${item.favorite?1:0}"` : ''; }
 
   // ── Placeholders ─────────────────────────────────────────────
   // SVG fallbacks used when MA logo image fails or for specific types
@@ -571,6 +761,7 @@ class MABrowserCard extends HTMLElement {
     el.innerHTML = `<svg width="100%" height="100%" style="display:block;position:absolute;inset:0;object-fit:cover;" preserveAspectRatio="xMidYMax meet" viewBox="0 0 240 240" fill="none" xmlns="http://www.w3.org/2000/svg"> <path d="M109.394 4.3814C115.242 -1.46047 124.788 -1.46047 130.606 4.3814L229.394 103.269C235.242 109.111 240 120.643 240 128.907V219.017L239.995 219.373C239.789 227.459 233.114 234.001 225 234.001H15C6.75759 234.001 2.40473e-05 227.22 0 218.987V128.877C0.000120331 120.613 4.78834 109.081 10.6064 103.239L109.394 4.3814Z" fill="#F2F4F9"/> <path d="M109.394 4.3814C115.242 -1.46047 124.788 -1.46047 130.606 4.3814L229.394 103.269C235.242 109.111 240 120.643 240 128.907V219.017L239.995 219.373C239.789 227.459 233.114 234.001 225 234.001H15C6.75759 234.001 2.40473e-05 227.22 0 218.987V128.877C0.000120331 120.613 4.78834 109.081 10.6064 103.239L109.394 4.3814ZM36 120.001C31.5817 120.001 28 123.582 28 128.001V206.001H44V128.001C44 123.582 40.4183 120.001 36 120.001ZM68 120.001C63.5817 120.001 60 123.582 60 128.001V206.001H76V128.001C76 123.582 72.4183 120.001 68 120.001ZM100 120.001C95.5817 120.001 92 123.582 92 128.001V206.001H108V128.001C108 123.582 104.418 120.001 100 120.001ZM158.393 120.427C154.2 119.032 149.671 121.3 148.275 125.492L121.479 206.001H138.342L163.456 130.544C164.851 126.352 162.584 121.823 158.393 120.427ZM188.708 125.492C187.313 121.3 182.783 119.032 178.591 120.427C174.399 121.823 172.131 126.352 173.526 130.544L198.642 206.001H215.504L188.708 125.492Z" fill="#18BCF2"/> </svg>`;  }
 
   async _loadImgInto(url, el, ph, maLogoType = null) {
+    url = this._imageUrl(url);
     if (!url) {
       if (maLogoType) this._loadMaLogo(el, maLogoType); else el.innerHTML = ph;
       return;
@@ -646,15 +837,99 @@ class MABrowserCard extends HTMLElement {
     const r=res.response??res; const items=r.items??(Array.isArray(r)?r:[]);
     this._libCache[key]={items,ts:Date.now()}; return items;
   }
-  async _search(query) {
+  // One page of the library. get_library supports offset, so views can be
+  // loaded a batch at a time instead of one big capped request.
+  async _fetchLibraryPage(mediaType, orderBy, limit, offset, favoritesOnly=false) {
+    const data={media_type:mediaType,order_by:orderBy,limit,offset}; if(favoritesOnly) data.favorite=true;
+    const res=await this._callService('get_library',data); if(!res) return [];
+    const r=res.response??res; return r.items??(Array.isArray(r)?r:[]);
+  }
+
+  // ── LAZY LOADING ──────────────────────────────────────────────
+  _pageSize() { const n=parseInt(this._config.page_size,10); return n>=10?Math.min(n,500):48; }
+  _lazyStop() {
+    if(this._lazyObs){this._lazyObs.disconnect();this._lazyObs=null;}
+    if(this._lazy){this._lazy.gone=true;this._lazy=null;}
+  }
+  // Fills the (single) .section currently in the scroll area a batch at a time.
+  //   items      array already in memory (may be empty; may be a shared cache array)
+  //   render     (item, index) => html
+  //   fetchMore  optional async (items) => {items, done}; called once everything in
+  //              memory has been rendered and the list isn't known to be complete
+  //   done       true if there is nothing further to fetch
+  //   onDone     optional callback when the list is known to be complete
+  _mountLazy({items, render, fetchMore=null, done=true, onDone=null}) {
+    this._lazyStop();
+    const secs=this._scroll().querySelectorAll('.section'); const section=secs[secs.length-1]; if(!section) return;
+    const wrap=section.lastElementChild; if(!wrap) return;
+    const badge=section.querySelector('.sec-count');
+    const st={items, rendered:0, done:done||!fetchMore, gone:false, pending:null, size:this._pageSize()};
+    this._lazy=st;
+    const sentinel=document.createElement('div'); sentinel.className='lazy-sentinel';
+    const spin=()=>{ sentinel.innerHTML='<div class="spinner"></div>'; };
+    spin(); section.appendChild(sentinel);
+    const updateBadge=()=>{ if(badge) badge.textContent=st.items.length+(st.done?'':'+'); };
+    const finish=()=>{
+      if(this._lazyObs&&this._lazy===st){this._lazyObs.disconnect();this._lazyObs=null;}
+      sentinel.remove(); updateBadge(); if(onDone) onDone();
+    };
+    const renderChunk=()=>{
+      const slice=st.items.slice(st.rendered,st.rendered+st.size);
+      if(!slice.length) return;
+      wrap.insertAdjacentHTML('beforeend',slice.map((it,i)=>render(it,st.rendered+i)).join(''));
+      st.rendered+=slice.length;
+      this._hydrateImages(); this._highlightNowPlaying();
+    };
+    const fetchOnce=()=>{
+      if(st.pending) return st.pending;
+      st.pending=(async()=>{
+        try {
+          const r=await fetchMore(st.items); if(st.gone) return;
+          if(r&&r.items&&r.items.length) st.items.push(...r.items);
+          if(!r||r.done||!(r.items&&r.items.length)) st.done=true;
+        } finally { st.pending=null; }
+      })();
+      return st.pending;
+    };
+    // Used by Play all / Shuffle all so they cover the whole list, not just what's loaded.
+    st.loadAll=async()=>{ while(!st.done&&!st.gone) await fetchOnce(); };
+    const next=async()=>{
+      if(st.gone||st.busy) return;
+      if(st.rendered<st.items.length) renderChunk();
+      else if(!st.done){
+        st.busy=true;
+        try { await fetchOnce(); if(st.gone) return; renderChunk(); }
+        catch(e) {
+          console.warn('[MA Card] load more failed:',e);
+          if(st.gone) return;
+          sentinel.innerHTML='<button class="retry-btn">Couldn\u2019t load more \u2014 tap to retry</button>';
+          sentinel.firstChild.addEventListener('click',()=>{ spin(); st.busy=false; next(); });
+          return;
+        } finally { st.busy=false; }
+      }
+      updateBadge();
+      if(st.rendered>=st.items.length&&st.done){ finish(); return; }
+      // If the sentinel is still on screen the observer won't fire again, so re-arm it.
+      if(this._lazyObs&&this._lazy===st){ this._lazyObs.unobserve(sentinel); this._lazyObs.observe(sentinel); }
+    };
+    this._lazyObs=new IntersectionObserver(entries=>{ if(entries.some(e=>e.isIntersecting)) next(); },{root:this._scroll(),rootMargin:'400px'});
+    renderChunk(); updateBadge();
+    if(st.rendered>=st.items.length&&st.done){ finish(); return; }
+    this._lazyObs.observe(sentinel);
+  }
+
+  async _search(query, limit=20, libraryOnly=false) {
     const media_type=['album','artist','track','radio','playlist'];
     if(this._config.show_podcasts) media_type.push('podcast');
     if(this._config.show_audiobooks) media_type.push('audiobook');
-    const res=await this._callService('search',{name:query,media_type,limit:20});
+    const res=await this._callService('search',{name:query,media_type,limit,...(libraryOnly?{library_only:true}:{})});
     return res?.response??res??{};
   }
   async _playMedia(uri, mediaType, enqueue='play') {
     if(!this._selectedPlayer){alert('Select a player first');return;}
+    // Still on the "any media_player" fallback list (MA players haven't appeared yet):
+    // music_assistant.play_media would silently do nothing, so tell the user instead.
+    if(this._playersAreFallback){this._toast('Waiting for Music Assistant players\u2026');return;}
     const isShuffle    = enqueue === 'shuffle';
     const isShuffleAdd = enqueue === 'shuffle_add';
     const isPlayNow    = enqueue === 'play' || isShuffle;
@@ -683,32 +958,161 @@ class MABrowserCard extends HTMLElement {
     });
     return this._wsReady;
   }
+  // Resolve the add-on route using the same authenticated Supervisor API as HA.
+  // Never fall back to the LAN URL when ingress fails.
+  async _prepareMA() {
+    if (!this._config.ma_addon_slug) {
+      const url = new URL(this._directMaUrl, location.origin);
+      if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) {
+        throw new Error('MA Server URL must be an HTTP(S) address without credentials.');
+      }
+      if (location.protocol === 'https:' && url.protocol !== 'https:') {
+        throw new Error('Use ma_addon_slug for the MA add-on, or an HTTPS MA Server URL. Direct HTTP from an HTTPS dashboard is blocked.');
+      }
+      this._maUrl = url.href.replace(/\/$/, '');
+      return;
+    }
+    const generation = this._maGeneration;
+    const info = await this._supervisor(`/addons/${this._config.ma_addon_slug}/info`);
+    if (generation !== this._maGeneration) throw new Error('MA configuration changed; reconnecting.');
+    if (!info.ingress || !info.ingress_entry || info.state !== 'started') {
+      throw new Error('Music Assistant add-on must be running with ingress enabled. Check ma_addon_slug.');
+    }
+    const url = new URL(info.ingress_entry, location.origin);
+    if (url.origin !== location.origin || !/^\/api\/hassio_ingress\/[^/]+\/?$/.test(url.pathname)
+        || url.search || url.hash || url.username || url.password) {
+      throw new Error('Supervisor returned an unexpected ingress URL.');
+    }
+    await this._ensureIngressSession();
+    if (generation !== this._maGeneration) throw new Error('MA configuration changed; reconnecting.');
+    this._maUrl = url.href.replace(/\/$/, '');
+    clearInterval(this._ingressTimer);
+    this._ingressTimer = setInterval(() => {
+      this._ensureIngressSession().catch(() => {
+        this._stopMA();
+        this._err(new Error('Music Assistant ingress session could not be renewed. Reload the dashboard to reconnect.'));
+      });
+    }, 5 * 60 * 1000);
+  }
+  _supervisor(endpoint, method = 'get', data) {
+    return this._hass.callWS({type: 'supervisor/api', endpoint, method, ...(data ? {data} : {})});
+  }
+  async _ensureIngressSession() {
+    // HA scopes this cookie to /api/hassio_ingress/, so it cannot be read
+    // from a dashboard. Keep our session in memory and renew it like HA does.
+    let session = this._ingressSession;
+    if (session) {
+      try { await this._supervisor('/ingress/validate_session', 'post', {session}); }
+      catch (_) { session = null; }
+    }
+    if (!session) session = (await this._supervisor('/ingress/session', 'post')).session;
+    if (!session || !/^[a-zA-Z0-9_-]+$/.test(session)) {
+      throw new Error('Unable to create a Music Assistant ingress session.');
+    }
+    this._ingressSession = session;
+    document.cookie = `ingress_session=${session};path=/api/hassio_ingress/;SameSite=Strict${location.protocol === 'https:' ? ';Secure' : ''}`;
+  }
+  _imageUrl(value) {
+    if (!value || typeof value !== 'string') return null;
+    try {
+      const url = new URL(value, location.origin);
+      if (!['http:', 'https:'].includes(url.protocol)) return null;
+      if (this._config.ma_addon_slug && this._maUrl) {
+        // MA service responses can contain LAN URLs even when the socket uses ingress.
+        const direct = this._directMaUrl ? new URL(this._directMaUrl, location.origin) : null;
+        if ((direct && url.origin === direct.origin) || /^\/imageproxy(?:\/|$)/.test(url.pathname)) {
+          return this._maUrl + url.pathname + url.search;
+        }
+        // Let MA fetch insecure external artwork server-side, never the browser.
+        if (url.protocol === 'http:' && location.protocol === 'https:') {
+          return `${this._maUrl}/imageproxy?path=${encodeURIComponent(url.href)}&provider=url&size=256&fmt=jpeg`;
+        }
+      }
+      if (location.protocol === 'https:' && url.protocol !== 'https:') return null;
+      return url.href;
+    } catch (_) { return null; }
+  }
+  _stopMA() {
+    this._maGeneration = (this._maGeneration || 0) + 1;
+    clearTimeout(this._wsRetryTimer); clearTimeout(this._wsAuthTimer);
+    clearInterval(this._ingressTimer);
+    if (this._ws) { this._ws.onclose = null; this._ws.close(); this._ws = null; }
+    this._wsReady = false;
+    this._rejectPendingMA('MA connection closed');
+  }
+  _rejectPendingMA(message) {
+    for (const pending of Object.values(this._wsPending)) {
+      clearTimeout(pending.timer); pending.reject(new Error(message));
+    }
+    this._wsPending = {};
+  }
   _connectMA() {
-    if(!this._maToken||!this._maUrl) return;
-    if(this._ws){this._ws.close();this._ws=null;}
-    const wsUrl=this._maUrl.replace('http://','ws://').replace('https://','wss://')+'/ws';
-    const ws=new WebSocket(wsUrl); this._ws=ws; this._wsReady=false; this._wsGreeted=false;
-    ws.onmessage=e=>{
-      const msg=JSON.parse(e.data);
-      if(!this._wsGreeted){this._wsGreeted=true;console.debug('[MA Card] MA WS first message:',msg);}
-      if(msg.server_version&&!msg.message_id){ws.send(JSON.stringify({message_id:'auth',command:'auth',args:{token:this._maToken}}));return;}
-      if(msg.message_id==='auth'){
-        if(msg.result?.authenticated){this._wsReady=true;}
-        else{console.error('[MA Card] MA WS auth did not succeed \u2014 full response:',msg);}
+    if (!this._maToken || !this._maUrl || !this.isConnected || this._ws) return;
+    const url = new URL(this._maUrl + '/ws');
+    if (location.protocol === 'https:' && url.protocol !== 'https:') return;
+    url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(url.href);
+    this._ws = ws; this._wsReady = false;
+    this._wsAuthTimer = setTimeout(() => ws.close(), 15000);
+    ws.onmessage = e => {
+      if (this._ws !== ws) return;
+      let msg;
+      try { msg = JSON.parse(e.data); } catch (_) { return; }
+      if (msg.server_version && !msg.message_id) {
+        ws.send(JSON.stringify({message_id: 'auth', command: 'auth', args: {token: this._maToken}}));
         return;
       }
-      const pending=this._wsPending[msg.message_id];
-      if(pending){delete this._wsPending[msg.message_id];msg.error_code?pending.reject(new Error(msg.details||'MA error '+msg.error_code)):pending.resolve(msg.result);}
+      if (msg.message_id === 'auth') {
+        clearTimeout(this._wsAuthTimer);
+        if (msg.result?.authenticated) {
+          this._wsReady = true;
+          // Refresh whenever auth completes, including slow starts and reconnects.
+          if (this._view === 'home') this._renderHome();
+        } else {
+          this._stopMA();
+          this._err(new Error('Music Assistant rejected the access token. Check ma_token.'));
+        }
+        return;
+      }
+      const pending = this._wsPending[msg.message_id];
+      if (pending) {
+        if (msg.error_code) {
+          delete this._wsPending[msg.message_id]; clearTimeout(pending.timer);
+          pending.reject(new Error(msg.details || 'MA error ' + msg.error_code));
+        } else if (msg.partial || pending.parts) {
+          pending.parts = (pending.parts || []).concat(msg.result || []);
+          if (!msg.partial) {
+            delete this._wsPending[msg.message_id]; clearTimeout(pending.timer);
+            pending.resolve(pending.parts);
+          }
+        } else {
+          delete this._wsPending[msg.message_id]; clearTimeout(pending.timer);
+          pending.resolve(msg.result);
+        }
+      }
     };
-    ws.onerror=()=>{this._wsReady=false;};
-    ws.onclose=()=>{this._wsReady=false;setTimeout(()=>{if(this._maToken)this._connectMA();},10000);};
+    ws.onerror = () => { if (this._ws === ws) this._wsReady = false; };
+    ws.onclose = () => {
+      if (this._ws !== ws) return;
+      this._ws = null; this._wsReady = false;
+      clearTimeout(this._wsAuthTimer); this._rejectPendingMA('MA connection lost');
+      this._wsRetryTimer = setTimeout(async () => {
+        if (!this.isConnected) return;
+        try { await this._prepareMA(); this._connectMA(); }
+        catch (_) { this._err(new Error('Music Assistant connection failed. Check the add-on and reload the dashboard.')); }
+      }, 10000);
+    };
   }
-  _wsSend(command,args={}) {
-    return new Promise((resolve,reject)=>{
-      if(!this._ws||!this._wsReady){reject(new Error('MA WS not ready'));return;}
-      const id=String(++this._wsMsgId); this._wsPending[id]={resolve,reject};
-      this._ws.send(JSON.stringify({message_id:id,command,args}));
-      setTimeout(()=>{if(this._wsPending[id]){delete this._wsPending[id];reject(new Error('MA WS timeout'));}},10000);
+  _wsSend(command, args = {}) {
+    return new Promise((resolve, reject) => {
+      if (!this._ws || !this._wsReady) { reject(new Error('MA WS not ready')); return; }
+      const id = String(++this._wsMsgId);
+      const timer = setTimeout(() => {
+        delete this._wsPending[id]; reject(new Error('MA WS timeout'));
+      }, 10000);
+      this._wsPending[id] = {resolve, reject, timer};
+      try { this._ws.send(JSON.stringify({message_id: id, command, args})); }
+      catch (e) { delete this._wsPending[id]; clearTimeout(timer); reject(e); }
     });
   }
   async _fetchRecentlyAdded(limit=20) {
@@ -762,15 +1166,243 @@ class MABrowserCard extends HTMLElement {
     } catch(e){console.warn('[MA Card] in_progress_items failed:',e.message);return[];}
   }
 
+  // ── FAVOURITES ────────────────────────────────────────────────
+  // Fetch an item from MA. The type-specific getter goes first: it copes with
+  // provider URIs (e.g. itunes_podcasts://podcast/123) and returns the library
+  // copy when there is one. item_by_uri is the fallback.
+  async _lookupItem(uri, type) {
+    const parsed=this._parseUri(uri);
+    if(parsed) {
+      try {
+        const item=await this._wsSend(`music/${type}s/get_${type}`,{item_id:parsed.item_id,provider_instance_id_or_domain:parsed.provider});
+        if(item) return item;
+      } catch(e) { /* fall through to item_by_uri */ }
+    }
+    return this._wsSend('music/item_by_uri',{uri});
+  }
+  // Current favourite flag from MA: true/false, or null if MA doesn't report
+  // one (= not favouritable) or the lookup fails.
+  async _resolveFavState(uri, type) {
+    if(!await this._waitForWS()) return null;
+    try {
+      const item=await this._lookupItem(uri,type);
+      return typeof item?.favorite==='boolean' ? item.favorite : null;
+    } catch(e){ return null; }
+  }
+  // MA removes favourites by library item id, not URI. Library URIs
+  // (library://album/50) carry it directly; for provider URIs, ask MA and
+  // use its library mapping.
+  async _libraryItemId(uri, type) {
+    const parsed=this._parseUri(uri);
+    if(parsed?.provider==='library') return parsed.item_id;
+    const item=await this._lookupItem(uri,type);
+    if(item?.provider==='library') return item.item_id;
+    const mapping=(item?.provider_mappings||[]).find(m=>m.provider_domain==='library'||m.provider_instance==='library');
+    if(mapping?.item_id) return mapping.item_id;
+    throw new Error('This item isn\u2019t in your library, so there\u2019s no favourite to remove.');
+  }
+  async _toggleFavourite(uri, type, name, isFav) {
+    try {
+      if(!await this._waitForWS()) throw new Error('Favourites need the MA access token (ma_token) and a working MA connection.');
+      if(isFav) {
+        const libraryId=await this._libraryItemId(uri,type);
+        await this._wsSend('music/favorites/remove_item',{media_type:type,library_item_id:libraryId});
+      } else {
+        await this._wsSend('music/favorites/add_item',{item:uri});
+      }
+      // Don't re-render: drop cached lists so the next view change / search
+      // fetches fresh data, and keep the cards already on screen in sync so
+      // their right-click menu shows the right option.
+      this._libCache={};
+      this._setFavState(uri,!isFav);
+      this._toast(isFav?`Removed "${name}" from favourites`:`Added "${name}" to favourites`);
+    } catch(e) {
+      console.warn('[MA Card] favourite toggle failed:',e);
+      this._toast(`Couldn\u2019t ${isFav?'remove from':'add to'} favourites: ${e.message}`);
+    }
+  }
+  _setFavState(uri, isFav) {
+    this._scroll().querySelectorAll('[data-uri]').forEach(el=>{ if(el.dataset.uri===uri) el.dataset.fav=isFav?'1':'0'; });
+  }
+  _toast(text) {
+    const card=this.shadowRoot.querySelector('.card'); if(!card) return;
+    card.querySelector('.toast')?.remove();
+    const t=document.createElement('div'); t.className='toast'; t.textContent=text;
+    card.appendChild(t);
+    setTimeout(()=>t.remove(),2500);
+  }
+
   // ── PLAYERS ───────────────────────────────────────────────────
   _loadPlayers() {
     const sel=this._$('playerSel'); let entities=[];
     if(this._config.players?.length) entities=this._config.players.map(eid=>this._hass.states[eid]).filter(Boolean);
     if(!entities.length) entities=Object.values(this._hass.states).filter(e=>{if(!e.entity_id.startsWith('media_player.'))return false;const a=e.attributes;return a.app_id==='music_assistant'||a.mass_player_type||a.active_queue;});
-    if(!entities.length) entities=Object.values(this._hass.states).filter(e=>e.entity_id.startsWith('media_player.'));
+    // Last resort: any media_player. Flag it so playback can be guarded until
+    // real MA players appear (at which point _playersStale() triggers a rebuild).
+    let usedFallback=false;
+    if(!entities.length){
+      entities=Object.values(this._hass.states).filter(e=>e.entity_id.startsWith('media_player.'));
+      usedFallback=entities.length>0;
+    }
+    this._playersAreFallback=usedFallback;
     this._players=entities;
     sel.innerHTML=entities.length?entities.map(e=>`<option value="${e.entity_id}">${this._esc(e.attributes.friendly_name||e.entity_id)}</option>`).join(''):'<option value="">No players found</option>';
-    if(entities.length){this._selectedPlayer=entities[0].entity_id;sel.value=this._selectedPlayer;}
+    if(entities.length){
+      const keep=entities.find(e=>e.entity_id===this._selectedPlayer);
+      this._selectPlayer(keep?keep.entity_id:entities[0].entity_id, false);
+    }
+    this._autoFollow();
+  }
+
+  // ── PLAYER SELECTION / AUTO-FOLLOW ────────────────────────────
+  // manual=true marks a user choice, which blocks auto-follow for
+  // manual_hold_minutes (0 = until reload).
+  _selectPlayer(id, manual) {
+    if(!id) return;
+    const changed = id !== this._selectedPlayer;
+    this._selectedPlayer = id;
+    const sel = this._$('playerSel'); if(sel) sel.value = id;
+    if(manual) this._manualAt = Date.now();
+    if(changed) {
+      this._lastNpKey = ''; this._maQueueState = null;
+      if(this._queueVisible) { this._hideQueue(); this._showQueue(); }
+      this._updateNowPlaying();
+    }
+  }
+  _manualActive() {
+    if(!this._manualAt) return false;
+    const raw = this._config.manual_hold_minutes;
+    let mins = (raw === undefined || raw === null || raw === '') ? 5 : Number(raw);
+    if(!(mins >= 0)) mins = 5;
+    if(mins === 0) return true;
+    if(Date.now() - this._manualAt < mins * 60000) return true;
+    this._manualAt = 0; return false;
+  }
+  _playerAreaId(entityId) {
+    const h = this._hass; const ent = h.entities?.[entityId];
+    if(ent?.area_id) return ent.area_id;
+    const dev = ent?.device_id ? h.devices?.[ent.device_id] : null;
+    return dev?.area_id || null;
+  }
+  _matchArea(value) {
+    if(!value) return null;
+    const s = String(value).trim().toLowerCase(); const areas = this._hass.areas || {};
+    if(!Object.keys(areas).length) return s;
+    if(areas[s]) return s;
+    for(const [id, a] of Object.entries(areas)) if((a.name||'').toLowerCase() === s) return id;
+    return null;
+  }
+  // The area of the device running this dashboard. In order: `area` config,
+  // ?area= in the URL, then Browser Mod's browser ID (matched against its entities).
+  _findAppArea() {
+    const h = this._hass;
+    let explicit = this._config.area;
+    if(!explicit) { try { explicit = new URLSearchParams(location.search).get('area'); } catch(_) {} }
+    if(explicit) return this._matchArea(explicit);
+    const bid = window.browser_mod?.browserID;
+    if(bid && h.entities) {
+      const slug = String(bid).toLowerCase().replace(/[^a-z0-9]+/g, '_');
+      for(const e of Object.values(h.entities)) {
+        if(!e.entity_id || !e.entity_id.includes(slug)) continue;
+        const area = e.area_id || (e.device_id ? h.devices?.[e.device_id]?.area_id : null);
+        if(area) return area;
+      }
+    }
+    return null;
+  }
+  _appAreaId() {
+    if(!this._hass) return null;
+    if(this._areaTs && Date.now() - this._areaTs < 60000) return this._areaId;
+    this._areaTs = Date.now(); this._areaId = this._findAppArea();
+    return this._areaId;
+  }
+  // A sync group is represented once: key = group leader (first of group_members).
+  _groupInfo(id, ids) {
+    const gm = this._hass.states[id]?.attributes?.group_members;
+    if(Array.isArray(gm) && gm.length > 1) {
+      const key = gm[0];
+      const rep = ids.includes(key) ? key : (gm.find(m => ids.includes(m)) || id);
+      return { key, rep, members: gm };
+    }
+    return { key: id, rep: id, members: [id] };
+  }
+  _playingGroups() {
+  const h = this._hass, ids = this._players.map(p => p.entity_id);
+  const isGroup = id => h.states[id]?.attributes?.mass_player_type === 'group';
+  // Groups first, everything else keeps its original order
+  const ordered = [...ids.filter(isGroup), ...ids.filter(id => !isGroup(id))];
+  const covered = new Set(), seen = new Set(), out = [];
+  ordered.forEach(id => {
+    if (h.states[id]?.state !== 'playing' || covered.has(id)) return;
+    const gm = h.states[id].attributes.group_members || [];
+    const g = isGroup(id)
+      ? { key: id, rep: id, members: [id, ...gm] }   // the group itself is the one we select
+      : this._groupInfo(id, ids);                    // non-MA grouping behaves as before
+    if (seen.has(g.key)) return;
+    seen.add(g.key);
+    g.members.forEach(m => covered.add(m));
+    out.push(g);
+  });
+  return out;
+}
+  _autoTarget() {
+    const h = this._hass, ids = this._players.map(p => p.entity_id);
+    if(!ids.length) return null;
+    const area = this._config.use_app_area === false ? null : this._appAreaId();
+    const inArea = list => !!area && list.some(id => this._playerAreaId(id) === area);
+    const playing = this._playingGroups();
+    if(playing.length) return (playing.find(g => inArea(g.members)) || playing[0]).rep;
+    // Nothing playing: stay on a paused player so it can be resumed.
+    const cur = this._selectedPlayer;
+    if(cur && h.states[cur]?.state === 'paused') return cur;
+    if(area) { const a = ids.find(id => inArea([id])); if(a) return a; }
+    const def = this._config.default_player;
+    if(def && ids.includes(def)) return def;
+    return ids[0];
+  }
+  _autoFollow() {
+    if(!this._hass) return;
+    if(this._players.length && this._config.auto_follow !== false && !this._manualActive()) {
+      const target = this._autoTarget();
+      if(target && target !== this._selectedPlayer) this._selectPlayer(target, false);
+    }
+    this._updatePlayingStrip();
+  }
+  _updatePlayingStrip() {
+    const el = this._$('playingStrip'); if(!el || !this._hass) return;
+    const h = this._hass;
+    // The selected player (or its sync group) is already shown in the player bar, so leave it out.
+    const groups = this._config.show_all_playing_players === false ? [] :
+      this._playingGroups().filter(g => !g.members.includes(this._selectedPlayer) && g.rep !== this._selectedPlayer);
+    const items = groups.map(g => {
+      const st = h.states[g.key] || h.states[g.rep];
+      const a = st?.attributes || {};
+      return {
+        rep: g.rep,
+        name: (h.states[g.rep]?.attributes.friendly_name || g.rep) + (g.members.length > 1 ? ` +${g.members.length - 1}` : ''),
+        art: this._imageUrl(a.entity_picture_local || a.entity_picture) || '',
+        track: [a.media_title, a.media_artist].filter(Boolean).join(' \u2013 '),
+        sel: g.members.includes(this._selectedPlayer),
+      };
+    });
+    const key = JSON.stringify(items);
+    if(key === this._lastStripKey) return;
+    this._lastStripKey = key;
+    el.style.display = items.length ? '' : 'none';
+    el.replaceChildren(...items.map(it => {
+      const row = document.createElement('div');
+      row.className = 'pl-item' + (it.sel ? ' selected' : '');
+      row.dataset.entity = it.rep; row.title = it.name;
+      const art = document.createElement('div'); art.className = 'pl-art';
+      if(it.art) art.style.backgroundImage = `url("${it.art.replace(/"/g, '%22')}")`;
+      else art.textContent = '\u266A';
+      const info = document.createElement('div'); info.className = 'pl-info';
+      const n = document.createElement('div'); n.className = 'pl-name'; n.textContent = it.name;
+      info.appendChild(n);
+      if(it.track) { const t = document.createElement('div'); t.className = 'pl-track'; t.textContent = it.track; info.appendChild(t); }
+      row.append(art, info);
+      return row;
+    }));
   }
 
   _nav(view,btn) {
@@ -795,18 +1427,23 @@ class MABrowserCard extends HTMLElement {
   async _renderGlobalSearch(q) {
     this._loading();
     try {
-      const res=await this._search(q);
+      const res=await this._search(q,50);
       const albums=res.albums??[],artists=res.artists??[],tracks=res.tracks??[],radio=res.radio??[],playlists=res.playlists??[];
       const podcasts=res.podcasts??[],audiobooks=res.audiobooks??[];
-      let html=`<div class="section"><div class="sec-hdr"><span class="sec-title">Search: ${this._esc(q)}</span></div></div>`;
-      if(albums.length)    html+=this._section('Albums',albums.map(a=>this._albumCardHtml(a)).join(''),'album-grid',albums.length,this._sectionActions(albums));
-      if(artists.length)   html+=this._section('Artists',artists.map(a=>this._artistCardHtml(a)).join(''),'artist-grid');
-      if(tracks.length)    html+=this._section('Tracks',tracks.map((t,i)=>this._trackRowHtml(t,i+1)).join(''),'track-list',tracks.length,this._sectionActions(tracks));
-      if(playlists.length) html+=this._section('Playlists',playlists.map(a=>this._albumCardHtml(a,'playlist')).join(''),'album-grid',playlists.length,this._sectionActions(playlists));
-      if(podcasts.length)  html+=this._section('Podcasts',podcasts.map(a=>this._albumCardHtml(a,'podcast')).join(''),'album-grid',podcasts.length,this._sectionActions(podcasts));
-      if(audiobooks.length)html+=this._section('Audiobooks',audiobooks.map(a=>this._albumCardHtml(a,'audiobook')).join(''),'album-grid',audiobooks.length,this._sectionActions(audiobooks));
-      if(radio.length)     html+=this._section('Radio',radio.map(a=>this._radioCardHtml(a)).join(''),'radio-grid');
-      if(!albums.length&&!artists.length&&!tracks.length&&!radio.length&&!playlists.length&&!podcasts.length&&!audiobooks.length) html=`<div class="state-box">No results for "${this._esc(q)}"</div>`;
+      const sectionDefs = {
+        albums:     albums.length     ? this._section('Albums',albums.map(a=>this._albumCardHtml(a)).join(''),'album-grid',albums.length,this._sectionActions(albums)) : '',
+        artists:    artists.length    ? this._section('Artists',artists.map(a=>this._artistCardHtml(a)).join(''),'artist-grid') : '',
+        tracks:     tracks.length     ? this._section('Tracks',tracks.map((t,i)=>this._trackRowHtml(t,i+1)).join(''),'track-list',tracks.length,this._sectionActions(tracks)) : '',
+        playlists:  playlists.length  ? this._section('Playlists',playlists.map(a=>this._albumCardHtml(a,'playlist')).join(''),'album-grid',playlists.length,this._sectionActions(playlists)) : '',
+        podcasts:   podcasts.length   ? this._section('Podcasts',podcasts.map(a=>this._albumCardHtml(a,'podcast')).join(''),'album-grid',podcasts.length,this._sectionActions(podcasts)) : '',
+        audiobooks: audiobooks.length ? this._section('Audiobooks',audiobooks.map(a=>this._albumCardHtml(a,'audiobook')).join(''),'album-grid',audiobooks.length,this._sectionActions(audiobooks)) : '',
+        radio:      radio.length      ? this._section('Radio',radio.map(a=>this._radioCardHtml(a)).join(''),'radio-grid') : '',
+      };
+      const hasResults = albums.length||artists.length||tracks.length||radio.length||playlists.length||podcasts.length||audiobooks.length;
+      const order = resolveOrder(this._config.search_order, DEFAULT_SEARCH_ORDER, SEARCH_ORDER_LABELS);
+      const html = hasResults
+        ? `<div class="section"><div class="sec-hdr"><span class="sec-title">Search: ${this._esc(q)}</span></div></div>` + order.map(k=>sectionDefs[k]||'').join('')
+        : `<div class="state-box">No results for "${this._esc(q)}"</div>`;
       this._scroll().innerHTML=html; this._hydrateImages(); this._attachClickHandler();
     } catch(e){this._err(e,()=>this._renderGlobalSearch(q));}
   }
@@ -832,46 +1469,93 @@ class MABrowserCard extends HTMLElement {
       const [favPlaylists,favAlbums,favArtists,favTracks,radio,recentlyPlayed,recentAlbums,random,inProgress,podcastNextUp]=results.map(r=>r.value??[]);
       const continueAudiobooks=this._config.show_audiobooks?inProgress.filter(i=>i.media_type==='audiobook').slice(0,sec.continue_audiobooks??10):[];
       const continuePodcasts=this._config.show_podcasts?podcastNextUp:[];
-      let html='';
-      if(continuePodcasts.length)   html+=this._section('Up Next \u2013 Podcasts',continuePodcasts.map(a=>this._inProgressCardHtml(a)).join(''),'album-grid',continuePodcasts.length);
-      if(continueAudiobooks.length) html+=this._section('Continue Listening \u2013 Audiobooks',continueAudiobooks.map(a=>this._inProgressCardHtml(a)).join(''),'album-grid',continueAudiobooks.length);
-      if(favPlaylists.length) html+=this._section('Favourite Playlists',favPlaylists.map(a=>this._albumCardHtml(a,'playlist')).join(''),'album-grid',favPlaylists.length,this._sectionActions(favPlaylists));
-      if(favAlbums.length)    html+=this._section('Favourite Albums',favAlbums.map(a=>this._albumCardHtml(a)).join(''),'album-grid',favAlbums.length,this._sectionActions(favAlbums));
-      if(favArtists.length)   html+=this._section('Favourite Artists',favArtists.map(a=>this._artistCardHtml(a)).join(''),'artist-grid',favArtists.length);
-      if(favTracks.length)    html+=this._section('Favourite Tracks',favTracks.map((t,i)=>this._trackRowHtml(t,i+1)).join(''),'track-list',favTracks.length,this._sectionActions(favTracks));
-      if(radio.length)          html+=this._section('Radio Stations',radio.map(a=>this._radioCardHtml(a)).join(''),'radio-grid');
-      if(recentlyPlayed.length) html+=this._section('Recently Played',recentlyPlayed.map(a=>this._maItemCardHtml(a)).join(''),'album-grid');
-      if(recentAlbums.length)   html+=this._section('Recently Added',recentAlbums.map(a=>this._maItemCardHtml(a)).join(''),'album-grid');
-      if(random.length)         html+=this._section('Discover',random.map(a=>this._albumCardHtml(a)).join(''),'album-grid');
+      const sectionDefs = {
+        continue_podcasts:   continuePodcasts.length   ? this._section('Up Next \u2013 Podcasts',continuePodcasts.map(a=>this._inProgressCardHtml(a)).join(''),'album-grid',continuePodcasts.length) : '',
+        continue_audiobooks: continueAudiobooks.length ? this._section('Continue Listening \u2013 Audiobooks',continueAudiobooks.map(a=>this._inProgressCardHtml(a)).join(''),'album-grid',continueAudiobooks.length) : '',
+        favourite_playlists: favPlaylists.length   ? this._section('Favourite Playlists',favPlaylists.map(a=>this._albumCardHtml(a,'playlist')).join(''),'album-grid',favPlaylists.length,this._sectionActions(favPlaylists)) : '',
+        favourite_albums:    favAlbums.length      ? this._section('Favourite Albums',favAlbums.map(a=>this._albumCardHtml(a)).join(''),'album-grid',favAlbums.length,this._sectionActions(favAlbums)) : '',
+        favourite_artists:   favArtists.length     ? this._section('Favourite Artists',favArtists.map(a=>this._artistCardHtml(a)).join(''),'artist-grid',favArtists.length) : '',
+        favourite_tracks:    favTracks.length      ? this._section('Favourite Tracks',favTracks.map((t,i)=>this._trackRowHtml(t,i+1)).join(''),'track-list',favTracks.length,this._sectionActions(favTracks)) : '',
+        radio:               radio.length          ? this._section('Radio Stations',radio.map(a=>this._radioCardHtml(a)).join(''),'radio-grid') : '',
+        recently_played:     recentlyPlayed.length ? this._section('Recently Played',recentlyPlayed.map(a=>this._maItemCardHtml(a)).join(''),'album-grid') : '',
+        recently_added:      recentAlbums.length   ? this._section('Recently Added',recentAlbums.map(a=>this._maItemCardHtml(a)).join(''),'album-grid') : '',
+        discover:            random.length         ? this._section('Discover',random.map(a=>this._albumCardHtml(a)).join(''),'album-grid') : '',
+      };
+      const order = resolveOrder(this._config.home_order, DEFAULT_HOME_ORDER, HOME_ORDER_LABELS);
+      const html = order.map(k=>sectionDefs[k]||'').join('');
       this._scroll().innerHTML=html||'<div class="state-box">No content found</div>';
       this._hydrateImages(); this._attachClickHandler(); this._highlightNowPlaying();
     } catch(e){this._err(e,()=>this._renderHome());}
   }
 
-  async _renderAlbums() {
-    const key='album:sort_name:500:false'; const cached=this._libCache[key];
-    if(cached){this._scroll().innerHTML=this._section('All Albums',cached.items.map(a=>this._albumCardHtml(a)).join(''),'album-grid',cached.items.length);this._hydrateImages();this._attachClickHandler();this._highlightNowPlaying();return;}
-    this._loading();
-    try{const items=await this._getLibrary('album','sort_name',500);this._scroll().innerHTML=this._section('All Albums',items.map(a=>this._albumCardHtml(a)).join(''),'album-grid',items.length);this._hydrateImages();this._attachClickHandler();this._highlightNowPlaying();}
-    catch(e){this._err(e,()=>this._renderAlbums());}
+  // Paged library view: loads one batch up front, then more as the user scrolls.
+  // Loaded pages are cached (same TTL as _getLibrary) so going back is instant.
+  async _renderLibraryList({title,mediaType,wrapClass,cardFn,favoritesOnly=false,retry}) {
+    const orderBy='sort_name', size=this._pageSize();
+    const key=`${mediaType}:${orderBy}:${favoritesOnly}:paged:${size}`;
+    let entry=this._libCache[key];
+    if(entry&&Date.now()-entry.ts>=this._libCacheTTL) entry=null;
+    if(entry) this._lazyStop(); else this._loading();
+    try {
+      if(!entry) {
+        const page=await this._fetchLibraryPage(mediaType,orderBy,size,0,favoritesOnly);
+        entry={items:page,offset:page.length,done:page.length<size,ts:Date.now()};
+        this._libCache[key]=entry;
+      }
+      this._scroll().innerHTML=this._section(title,'',wrapClass,entry.items.length);
+      this._attachClickHandler();
+      this._mountLazy({
+        items:entry.items, done:entry.done,
+        render:(it,i)=>cardFn(it,i),
+        fetchMore:async()=>{
+          const page=await this._fetchLibraryPage(mediaType,orderBy,size,entry.offset,favoritesOnly);
+          entry.offset+=page.length;
+          const seen=new Set(entry.items.map(i=>i.uri));
+          const fresh=page.filter(i=>!seen.has(i.uri));
+          // Short page or nothing new (e.g. offset ignored) means we've reached the end.
+          entry.done=page.length<size||!fresh.length;
+          return {items:fresh,done:entry.done};
+        },
+        onDone:()=>{ entry.done=true; }
+      });
+    } catch(e){ this._err(e,retry); }
   }
-  async _renderArtists() {
-    const key='artist:sort_name:500:false'; const cached=this._libCache[key];
-    if(cached){this._scroll().innerHTML=this._section('All Artists',cached.items.map(a=>this._artistCardHtml(a)).join(''),'artist-grid',cached.items.length);this._hydrateImages();this._attachClickHandler();return;}
-    this._loading();
-    try{const items=await this._getLibrary('artist','sort_name',500);this._scroll().innerHTML=this._section('All Artists',items.map(a=>this._artistCardHtml(a)).join(''),'artist-grid',items.length);this._hydrateImages();this._attachClickHandler();}
-    catch(e){this._err(e,()=>this._renderArtists());}
-  }
-  async _renderArtistDetail(artistName,artUrl) {
+  async _renderAlbums() { return this._renderLibraryList({title:'All Albums',mediaType:'album',wrapClass:'album-grid',cardFn:a=>this._albumCardHtml(a),retry:()=>this._renderAlbums()}); }
+  async _renderArtists() { return this._renderLibraryList({title:'All Artists',mediaType:'artist',wrapClass:'artist-grid',cardFn:a=>this._artistCardHtml(a),retry:()=>this._renderArtists()}); }
+  async _renderArtistDetail(artistName,artUrl,uri) {
     this._loading();
     try {
-      const res=await this._search(artistName);
-      const albums=(res.albums??[]).filter(a=>this._artistName(a).toLowerCase().includes(artistName.toLowerCase()));
+      let albums=null;
+      // Preferred: ask MA for the artist's library albums directly (full list, no search cap).
+      const parsed=this._parseUri(uri);
+      if(parsed&&await this._waitForWS()){
+        try {
+          // in_library_only:false = also include albums from configured providers (Spotify etc.), like the native MA UI.
+          const r=await this._wsSend('music/artists/artist_albums',{item_id:parsed.item_id,provider_instance_id_or_domain:parsed.provider,in_library_only:false});
+          albums=Array.isArray(r)?r:(r?.items??[]);
+          // Drop exact duplicates (same URI) in case MA returns an album via more than one mapping.
+          const seen=new Set(); albums=albums.filter(a=>{ const k=a.uri||`${a.name}|${a.version||''}|${a.year||''}`; if(seen.has(k)) return false; seen.add(k); return true; });
+        } catch(e) { console.warn('[MA Card] artist_albums failed, falling back to search:',e.message); }
+      }
+      // Tracks too, including provider (non-library) ones. Optional: a failure here must not break the page.
+      let artistTracks=[];
+      if(parsed&&await this._waitForWS()){
+        try {
+          const tr=await this._wsSend('music/artists/artist_tracks',{item_id:parsed.item_id,provider_instance_id_or_domain:parsed.provider,in_library_only:false});
+          artistTracks=(Array.isArray(tr)?tr:(tr?.items??[])).slice(0,50);
+        } catch(e) { console.warn('[MA Card] artist_tracks failed:',e.message); }
+      }
+      // Fallback (no ma_token / lookup failed): search across providers, with a much larger limit.
+      if(!albums){
+        const res=await this._search(artistName,100,false);
+        albums=(res.albums??[]).filter(a=>this._artistName(a).toLowerCase().includes(artistName.toLowerCase()));
+      }
       const ph=this._placeholder('artist');
       const artAttrs=artUrl?`data-img="${this._esc(artUrl)}" data-placeholder-type="artist"`:'';
-      this._scroll().innerHTML=`<div class="artist-hdr"><div class="artist-hero" ${artAttrs}>${ph}</div><div><div class="artist-detail-name">${this._esc(artistName)}</div><button class="artist-detail-back" data-action="back">&#x2190; Back</button></div></div>${albums.length?this._section('Albums',albums.map(a=>this._albumCardHtml(a)).join(''),'album-grid'):'<div class="state-box">No albums found</div>'}`;
+      this._scroll().innerHTML=`<div class="artist-hdr"><div class="artist-hero" ${artAttrs}>${ph}</div><div><div class="artist-detail-name">${this._esc(artistName)}</div><button class="artist-detail-back" data-action="back">&#x2190; Back</button></div></div>${artistTracks.length?this._section('Tracks',artistTracks.map((t,i)=>this._trackRowHtml(t,i+1)).join(''),'track-list',artistTracks.length,this._sectionActions(artistTracks)):''}${albums.length?this._section('Albums','','album-grid',albums.length):(artistTracks.length?'':'<div class="state-box">No albums found</div>')}`;
       this._hydrateImages(); this._attachClickHandler();
-    } catch(e){this._err(e,()=>this._renderArtistDetail(artistName,artUrl));}
+      if(albums.length) this._mountLazy({items:albums,render:a=>this._albumCardHtml(a)});
+    } catch(e){this._err(e,()=>this._renderArtistDetail(artistName,artUrl,uri));}
   }
   // MA URIs look like {provider_instance_id_or_domain}://{media_type}/{item_id}
   // e.g. "library://album/50" or "spotify://playlist/1a2b3c".
@@ -893,8 +1577,25 @@ class MABrowserCard extends HTMLElement {
         return;
       }
       const command=type==='playlist'?'music/playlists/playlist_tracks':type==='podcast'?'music/podcasts/podcast_episodes':'music/albums/album_tracks';
-      const result=await this._wsSend(command,{item_id:parsed.item_id,provider_instance_id_or_domain:parsed.provider});
-      const tracks=Array.isArray(result)?result:(result?.items??[]);
+      const baseArgs={item_id:parsed.item_id,provider_instance_id_or_domain:parsed.provider};
+      const toList=r=>Array.isArray(r)?r:(r?.items??[]);
+      const tracks=toList(await this._wsSend(command,baseArgs));
+      // Playlists are paged by MA (page=0,1,2...); albums and podcasts return everything at once.
+      let fetchMore=null, done=true;
+      if(type==='playlist'){
+        const keyOf=t=>`${t.uri}|${t.position??''}`;
+        const seen=new Set(tracks.map(keyOf)); let page=0;
+        done=!tracks.length;
+        fetchMore=async()=>{
+          page++;
+          let r;
+          try { r=toList(await this._wsSend(command,{...baseArgs,page})); }
+          catch(e) { console.warn('[MA Card] playlist paging not available:',e.message); return {items:[],done:true}; }
+          const fresh=r.filter(t=>!seen.has(keyOf(t)));
+          r.forEach(t=>seen.add(keyOf(t)));
+          return {items:fresh,done:!fresh.length};
+        };
+      }
       const ph=this._placeholder(type);
       const artAttrs=artUrl?`data-img="${this._esc(artUrl)}" data-placeholder-type="${type}"`:'';
       const inAlbum=type==='album';
@@ -906,53 +1607,31 @@ class MABrowserCard extends HTMLElement {
             <button class="artist-detail-back" data-action="back">&#x2190; Back</button>
           </div>
         </div>
-        ${tracks.length?this._section('Tracks',tracks.map((t,i)=>this._trackRowHtml(t,i+1,inAlbum)).join(''),'track-list',tracks.length,this._sectionActions(tracks)):'<div class="state-box">No tracks found</div>'}`;
+        ${tracks.length?this._section('Tracks','','track-list',tracks.length,this._sectionActions(tracks,!!fetchMore)):'<div class="state-box">No tracks found</div>'}`;
       this._hydrateImages(); this._attachClickHandler();
+      if(tracks.length) this._mountLazy({items:tracks,done,fetchMore,render:(t,i)=>this._trackRowHtml(t,i+1,inAlbum,type==='podcast')});
     } catch(e){this._err(e,()=>this._renderContentDetail(uri,type,name,artist,artUrl));}
   }
-  async _renderTracks() {
-    this._loading();
-    try{const items=await this._getLibrary('track','sort_name',500);this._scroll().innerHTML=this._section('All Tracks',items.map((t,i)=>this._trackRowHtml(t,i+1)).join(''),'track-list',items.length);this._hydrateImages();this._attachClickHandler();}
-    catch(e){this._err(e,()=>this._renderTracks());}
-  }
-  async _renderPlaylists() {
-    this._loading();
-    try{const items=await this._getLibrary('playlist','sort_name',500);this._scroll().innerHTML=this._section('Playlists',items.map(a=>this._albumCardHtml(a,'playlist')).join(''),'album-grid',items.length);this._hydrateImages();this._attachClickHandler();}
-    catch(e){this._err(e,()=>this._renderPlaylists());}
-  }
-  async _renderPodcasts() {
-    const key='podcast:sort_name:500:false'; const cached=this._libCache[key];
-    if(cached){this._scroll().innerHTML=this._section('Podcasts',cached.items.map(a=>this._albumCardHtml(a,'podcast')).join(''),'album-grid',cached.items.length);this._hydrateImages();this._attachClickHandler();return;}
-    this._loading();
-    try{const items=await this._getLibrary('podcast','sort_name',500);this._scroll().innerHTML=this._section('Podcasts',items.map(a=>this._albumCardHtml(a,'podcast')).join(''),'album-grid',items.length);this._hydrateImages();this._attachClickHandler();}
-    catch(e){this._err(e,()=>this._renderPodcasts());}
-  }
-  async _renderAudiobooks() {
-    const key='audiobook:sort_name:500:false'; const cached=this._libCache[key];
-    if(cached){this._scroll().innerHTML=this._section('Audiobooks',cached.items.map(a=>this._albumCardHtml(a,'audiobook')).join(''),'album-grid',cached.items.length);this._hydrateImages();this._attachClickHandler();return;}
-    this._loading();
-    try{const items=await this._getLibrary('audiobook','sort_name',500);this._scroll().innerHTML=this._section('Audiobooks',items.map(a=>this._albumCardHtml(a,'audiobook')).join(''),'album-grid',items.length);this._hydrateImages();this._attachClickHandler();}
-    catch(e){this._err(e,()=>this._renderAudiobooks());}
-  }
-  async _renderRadio() {
-    const key='radio:sort_name:5000:true'; const cached=this._libCache[key];
-    if(cached){this._scroll().innerHTML=this._section('Radio Stations',cached.items.map(a=>this._radioCardHtml(a)).join(''),'radio-grid',cached.items.length);this._hydrateImages();this._attachClickHandler();return;}
-    this._loading();
-    try{const items=await this._getLibrary('radio','sort_name',5000,true);this._scroll().innerHTML=this._section('Radio Stations',items.map(a=>this._radioCardHtml(a)).join(''),'radio-grid',items.length);this._hydrateImages();this._attachClickHandler();}
-    catch(e){this._err(e,()=>this._renderRadio());}
-  }
+  async _renderTracks() { return this._renderLibraryList({title:'All Tracks',mediaType:'track',wrapClass:'track-list',cardFn:(t,i)=>this._trackRowHtml(t,i+1),retry:()=>this._renderTracks()}); }
+  async _renderPlaylists() { return this._renderLibraryList({title:'Playlists',mediaType:'playlist',wrapClass:'album-grid',cardFn:a=>this._albumCardHtml(a,'playlist'),retry:()=>this._renderPlaylists()}); }
+  async _renderPodcasts() { return this._renderLibraryList({title:'Podcasts',mediaType:'podcast',wrapClass:'album-grid',cardFn:a=>this._albumCardHtml(a,'podcast'),retry:()=>this._renderPodcasts()}); }
+  async _renderAudiobooks() { return this._renderLibraryList({title:'Audiobooks',mediaType:'audiobook',wrapClass:'album-grid',cardFn:a=>this._albumCardHtml(a,'audiobook'),retry:()=>this._renderAudiobooks()}); }
+  async _renderRadio() { return this._renderLibraryList({title:'Radio Stations',mediaType:'radio',wrapClass:'radio-grid',cardFn:a=>this._radioCardHtml(a),favoritesOnly:true,retry:()=>this._renderRadio()}); }
 
   async _playAll(items,shuffle) {
     if(!items.length||!this._selectedPlayer){if(!this._selectedPlayer)alert('Select a player first');return;}
+    // Same guard as _playMedia: don't fire music_assistant.play_media at a non-MA fallback player.
+    if(this._playersAreFallback){this._toast('Waiting for Music Assistant players\u2026');return;}
     if(shuffle) await this._hass.callService('media_player','shuffle_set',{entity_id:this._selectedPlayer,shuffle:true});
     await this._hass.callService('music_assistant','play_media',{entity_id:this._selectedPlayer,media_id:items[0].uri,media_type:items[0].media_type||'album',enqueue:'play'});
     for(let i=1;i<items.length;i++) await this._hass.callService('music_assistant','play_media',{entity_id:this._selectedPlayer,media_id:items[i].uri,media_type:items[i].media_type||'album',enqueue:'add'});
     this._lastNpKey='';
   }
-  _sectionActions(items) {
+  _sectionActions(items, lazy=false) {
     if(!items.length) return '';
     const encoded=this._esc(JSON.stringify(items.map(i=>({uri:i.uri,media_type:i.media_type||'album'}))));
-    return `<button class="sec-btn" data-action="play-all" data-items="${encoded}">&#x25B6;&#xFE0E; Play all</button><button class="sec-btn" data-action="shuffle-all" data-items="${encoded}">&#x21C4;&#xFE0E; Shuffle all</button>`;
+    const lz=lazy?' data-lazy="1"':'';
+    return `<button class="sec-btn" data-action="play-all" data-items="${encoded}"${lz}>&#x25B6;&#xFE0E; Play all</button><button class="sec-btn" data-action="shuffle-all" data-items="${encoded}"${lz}>&#x21C4;&#xFE0E; Shuffle all</button>`;
   }
   _section(title,inner,wrapClass,count,actions) {
     const badge=count!==undefined?`<span class="sec-count">${count}</span>`:'';
@@ -970,7 +1649,7 @@ class MABrowserCard extends HTMLElement {
       ? `data-img="${this._esc(artUrl)}" data-placeholder-type="${mediaType}"`
       : (useMaLogo ? `data-ma-logo="${mediaType}"` : '');
     const artist=this._artistName(item),uri=item.uri||'',name=item.name||'';
-    return `<div class="album-card" data-uri="${this._esc(uri)}" data-type="${mediaType}" data-name="${this._esc(name)}" data-artist="${this._esc(artist)}" data-art="${this._esc(artUrl||'')}">
+    return `<div class="album-card" data-uri="${this._esc(uri)}" data-type="${mediaType}" data-name="${this._esc(name)}" data-artist="${this._esc(artist)}" data-art="${this._esc(artUrl||'')}"${this._favAttr(item)}>
       <div class="a-art-wrap" ${artAttrs}>${ph}<div class="a-overlay"><div class="play-circle">&#x25B6;&#xFE0E;</div></div><div class="playing-badge">&#x25B6;&#xFE0E; playing</div></div>
       <div class="a-name" title="${this._esc(name)}">${this._esc(name)}</div>
       <div class="a-artist">${this._esc(artist)}</div>
@@ -979,7 +1658,7 @@ class MABrowserCard extends HTMLElement {
   }
 
   _maItemArtUrl(item) {
-    if(typeof item.image==='string'&&item.image) return item.image;
+    if(typeof item.image==='string'&&item.image) return this._imageUrl(item.image);
     if(item.image?.proxy_id) return `${this._maUrl}/imageproxy/${item.image.proxy_id}`;
     if(item.image?.path) return `${this._maUrl}/imageproxy?path=${encodeURIComponent(item.image.path)}&provider=${encodeURIComponent(item.image.provider||'')}&size=256&fmt=jpeg`;
     if(item.metadata?.images?.[0]?.proxy_id) return `${this._maUrl}/imageproxy/${item.metadata.images[0].proxy_id}`;
@@ -995,7 +1674,7 @@ class MABrowserCard extends HTMLElement {
       const name=item.name||'',uri=item.uri||'';
       const ph=this._placeholder('artist');
       const artAttrs=artUrl?`data-img="${this._esc(artUrl)}" data-placeholder-type="artist"`:'';
-      return `<div class="artist-card" data-uri="${this._esc(uri)}" data-type="artist" data-name="${this._esc(name)}" data-art="${this._esc(artUrl||'')}"><div class="ar-img" ${artAttrs}>${ph}</div><div class="ar-name">${this._esc(name)}</div></div>`;
+      return `<div class="artist-card" data-uri="${this._esc(uri)}" data-type="artist" data-name="${this._esc(name)}" data-art="${this._esc(artUrl||'')}"${this._favAttr(item)}><div class="ar-img" ${artAttrs}>${ph}</div><div class="ar-name">${this._esc(name)}</div></div>`;
     }
     const ph=this._placeholder(mediaType);
     const useMaLogo = !artUrl && mediaType !== 'track';
@@ -1003,7 +1682,7 @@ class MABrowserCard extends HTMLElement {
       ? `data-img="${this._esc(artUrl)}" data-placeholder-type="${mediaType}"`
       : (useMaLogo ? `data-ma-logo="${mediaType}"` : '');
     const uri=item.uri||'',name=item.name||'';
-    return `<div class="album-card" data-uri="${this._esc(uri)}" data-type="${mediaType}" data-name="${this._esc(name)}" data-artist="" data-art="${this._esc(artUrl||'')}">
+    return `<div class="album-card" data-uri="${this._esc(uri)}" data-type="${mediaType}" data-name="${this._esc(name)}" data-artist="" data-art="${this._esc(artUrl||'')}"${this._favAttr(item)}>
       <div class="a-art-wrap" ${artAttrs}>${ph}<div class="a-overlay"><div class="play-circle">&#x25B6;&#xFE0E;</div></div></div>
       <div class="a-name" title="${this._esc(name)}">${this._esc(name)}</div>
     </div>`;
@@ -1033,8 +1712,14 @@ class MABrowserCard extends HTMLElement {
     const uri=item.uri||'',name=item.name||'';
     const parent=item.podcast?.name||item.show?.name||item.audiobook?.name||'';
     const pct=this._progressPct(item);
+    // Episodes can't be favourited, but their show can: point the menu at it.
+    const pod=mediaType==='podcast_episode'?item.podcast:null;
+    const podUri=pod?(pod.uri||(pod.provider&&pod.item_id?`${pod.provider}://podcast/${pod.item_id}`:'')):'';
+    const favAttrs=podUri
+      ?` data-fav-uri="${this._esc(podUri)}" data-fav-type="podcast" data-fav-name="${this._esc(pod.name||'')}"`
+      :this._favAttr(item);
     const progressHtml=pct!=null?`<div style="position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(0,0,0,.4)"><div style="height:100%;width:${pct}%;background:var(--gold)"></div></div>`:'';
-    return `<div class="album-card" data-uri="${this._esc(uri)}" data-type="${mediaType}" data-name="${this._esc(name)}" data-artist="" data-art="${this._esc(artUrl||'')}">
+    return `<div class="album-card" data-uri="${this._esc(uri)}" data-type="${mediaType}" data-name="${this._esc(name)}" data-artist="" data-art="${this._esc(artUrl||'')}"${favAttrs}>
       <div class="a-art-wrap" ${artAttrs}>${ph}<div class="a-overlay"><div class="play-circle">&#x25B6;&#xFE0E;</div></div>${progressHtml}</div>
       <div class="a-name" title="${this._esc(name)}">${this._esc(name)}</div>
       ${parent?`<div class="a-artist">${this._esc(parent)}</div>`:''}
@@ -1044,16 +1729,16 @@ class MABrowserCard extends HTMLElement {
     const artUrl=this._artUrl(item),name=item.name||'',uri=item.uri||'';
     const ph=this._placeholder('artist');
     const artAttrs=artUrl?`data-img="${this._esc(artUrl)}" data-placeholder-type="artist"`:'';
-    return `<div class="artist-card" data-uri="${this._esc(uri)}" data-type="artist" data-name="${this._esc(name)}" data-art="${this._esc(artUrl||'')}"><div class="ar-img" ${artAttrs}>${ph}</div><div class="ar-name">${this._esc(name)}</div></div>`;
+    return `<div class="artist-card" data-uri="${this._esc(uri)}" data-type="artist" data-name="${this._esc(name)}" data-art="${this._esc(artUrl||'')}"${this._favAttr(item)}><div class="ar-img" ${artAttrs}>${ph}</div><div class="ar-name">${this._esc(name)}</div></div>`;
   }
 
-  _trackRowHtml(item,num,inAlbum) {
+  _trackRowHtml(item,num,inAlbum,noFav) {
     const artUrl=this._artUrl(item);
     const ph=this._placeholder('track');
     const artAttrs=artUrl?`data-img="${this._esc(artUrl)}" data-placeholder-type="track"`:'';
     const artist=this._artistName(item),meta=inAlbum?artist:[artist,item.album?.name].filter(Boolean).join(' &middot; ');
     const uri=item.uri||'',name=item.name||'';
-    return `<div class="track-row" data-uri="${this._esc(uri)}" data-type="track" data-name="${this._esc(name)}">
+    return `<div class="track-row" data-uri="${this._esc(uri)}" data-type="track" data-name="${this._esc(name)}"${noFav?' data-nofav="1"':this._favAttr(item)}>
       <div class="tr-num">${num}</div><div class="tr-art" ${artAttrs}>${ph}</div>
       <div class="tr-info"><div class="tr-name">${this._esc(name)}</div>${meta?`<div class="tr-meta">${this._esc(meta)}</div>`:''}</div>
       <div class="tr-dur">${this._fmtDur(item.duration)}</div>
@@ -1067,7 +1752,7 @@ class MABrowserCard extends HTMLElement {
       ? `data-img="${this._esc(artUrl)}" data-placeholder-type="radio"`
       : `data-ma-logo="radio"`;
     const uri=item.uri||'',name=item.name||'',desc=item.metadata?.description||'';
-    return `<div class="album-card" data-uri="${this._esc(uri)}" data-type="radio" data-name="${this._esc(name)}" data-artist="" data-art="${this._esc(artUrl||'')}">
+    return `<div class="album-card" data-uri="${this._esc(uri)}" data-type="radio" data-name="${this._esc(name)}" data-artist="" data-art="${this._esc(artUrl||'')}"${this._favAttr(item)}>
       <div class="a-art-wrap" ${artAttrs}>${ph}<div class="a-overlay"><div class="play-circle">&#x25B6;&#xFE0E;</div></div></div>
       <div class="a-name" title="${this._esc(name)}">${this._esc(name)}</div>
       ${desc?`<div class="a-artist">${this._esc(desc)}</div>`:''}
@@ -1095,7 +1780,7 @@ class MABrowserCard extends HTMLElement {
       if (!target || !target.dataset.uri) return;
       _lpTimer = setTimeout(() => {
         if (!_lpMoved) {
-          this._showCtxMenu(touch.clientX, touch.clientY, target.dataset.uri, target.dataset.type || 'album', target.dataset.name || '', target.dataset.artist || '', target.dataset.art || '');
+          this._showCtxMenu(touch.clientX, touch.clientY, target.dataset.uri, target.dataset.type || 'album', target.dataset.name || '', target.dataset.artist || '', target.dataset.art || '', target.dataset);
         }
       }, 500);
     };
@@ -1120,7 +1805,7 @@ class MABrowserCard extends HTMLElement {
           return;
         }
         if(type==='artist'){
-          this._renderArtistDetail(cardEl.dataset.name,cardEl.dataset.art);
+          this._renderArtistDetail(cardEl.dataset.name,cardEl.dataset.art,cardEl.dataset.uri);
           return;
         }
       }
@@ -1128,15 +1813,26 @@ class MABrowserCard extends HTMLElement {
       return;
     }
     const trackEl=e.target.closest('.track-row'); if(trackEl&&trackEl.dataset.uri){this._playMedia(trackEl.dataset.uri,'track');return;}
-    const secBtn=e.target.closest('.sec-btn'); if(secBtn){this._playAll(JSON.parse(secBtn.dataset.items||'[]'),secBtn.dataset.action==='shuffle-all');return;}
+    const secBtn=e.target.closest('.sec-btn'); if(secBtn){
+      (async()=>{
+        let items=JSON.parse(secBtn.dataset.items||'[]');
+        // Lazily-loaded lists: finish loading first so "all" really means all.
+        if(secBtn.dataset.lazy&&this._lazy){
+          try { await this._lazy.loadAll(); } catch(err) { console.warn('[MA Card] loading full list failed:',err); }
+          if(this._lazy) items=this._lazy.items.map(i=>({uri:i.uri,media_type:i.media_type||'track'}));
+        }
+        this._playAll(items,secBtn.dataset.action==='shuffle-all');
+      })();
+      return;
+    }
     const backEl=e.target.closest('[data-action="back"]'); if(backEl){this._renderView(this._view);return;}
   }
   _handleCtx(e) {
     const el=e.target.closest('.album-card')||e.target.closest('.artist-card')||e.target.closest('.track-row');
     if(!el||!el.dataset.uri) return; e.preventDefault();
-    this._showCtxMenu(e.clientX,e.clientY,el.dataset.uri,el.dataset.type||'album',el.dataset.name||'',el.dataset.artist||'',el.dataset.art||'');
+    this._showCtxMenu(e.clientX,e.clientY,el.dataset.uri,el.dataset.type||'album',el.dataset.name||'',el.dataset.artist||'',el.dataset.art||'',el.dataset);
   }
-  _showCtxMenu(x,y,uri,type,name,artist,artUrl) {
+  _showCtxMenu(x,y,uri,type,name,artist,artUrl,ds={}) {
     this._dismissCtx();
     const menu=document.createElement('div'); menu.className='ctx-menu';
     const browseLabel=type==='artist'?'Browse albums':type==='podcast'?'Browse episodes':'Browse tracks';
@@ -1151,7 +1847,7 @@ class MABrowserCard extends HTMLElement {
     menu.querySelectorAll('.ctx-item').forEach(item=>item.addEventListener('click',e=>{
       e.stopPropagation();
       if(item.dataset.browse){
-        if(type==='artist') this._renderArtistDetail(name,artUrl);
+        if(type==='artist') this._renderArtistDetail(name,artUrl,uri);
         else this._renderContentDetail(uri,type,name,artist,artUrl);
       }
       else this._playMedia(uri,type,item.dataset.enqueue);
@@ -1160,7 +1856,41 @@ class MABrowserCard extends HTMLElement {
     const card=this.shadowRoot.querySelector('.card'); card.appendChild(menu); this._ctxMenu=menu;
     const cardRect=card.getBoundingClientRect(); let mx=x-cardRect.left,my=y-cardRect.top;
     menu.style.cssText=`position:absolute;left:${mx}px;top:${my}px;`;
-    requestAnimationFrame(()=>{const mr=menu.getBoundingClientRect(),cr=cardRect;if(mr.right>cr.right)menu.style.left=(mx-mr.width)+'px';if(mr.bottom>cr.bottom)menu.style.top=(my-mr.height)+'px';});
+    // Keep the menu inside the card; re-run after the favourite item is added.
+    const fit=()=>{
+      const mr=menu.getBoundingClientRect(),cr=card.getBoundingClientRect();
+      if(mr.right>cr.right)menu.style.left=Math.max(0,mx-mr.width)+'px';
+      if(mr.bottom>cr.bottom)menu.style.top=Math.max(0,my-mr.height)+'px';
+    };
+    requestAnimationFrame(fit);
+
+    // Contextual "Add to / Remove from favourites". Only offered when:
+    //  - an MA token is configured (favourites go over the MA websocket),
+    //  - the type is one MA can favourite (not e.g. podcast episodes), and
+    //  - MA actually reports a favourite state for the item.
+    // Podcast episodes in "Up Next" carry their parent podcast's details
+    // (data-fav-*), so the menu there acts on the podcast itself.
+    const fUri=ds.favUri||uri, fType=ds.favType||type, fName=ds.favName||name;
+    if(this._maToken && !ds.nofav && FAVOURITABLE_TYPES.includes(fType)){
+      const what=ds.favUri?' podcast':'';
+      const addFavItem=isFav=>{
+        if(this._ctxMenu!==menu) return; // menu was dismissed / replaced meanwhile
+        const el=document.createElement('div'); el.className='ctx-item';
+        el.innerHTML=isFav
+          ?`<span class="ctx-ico">&#x2665;&#xFE0E;</span>Remove${what} from favourites`
+          :`<span class="ctx-ico">&#x2661;&#xFE0E;</span>Add${what} to favourites`;
+        el.addEventListener('click',e=>{
+          e.stopPropagation();
+          this._toggleFavourite(fUri,fType,fName,isFav);
+          this._dismissCtx();
+        });
+        menu.appendChild(el);
+        fit();
+      };
+      const known=ds.favUri?'':(ds.fav||'');
+      if(known==='1'||known==='0') addFavItem(known==='1');
+      else this._resolveFavState(fUri,fType).then(isFav=>{ if(isFav!==null) addFavItem(isFav); });
+    }
   }
   _dismissCtx(){if(this._ctxMenu){this._ctxMenu.remove();this._ctxMenu=null;}}
   _highlightNowPlaying() {
@@ -1173,14 +1903,14 @@ class MABrowserCard extends HTMLElement {
     const card=this.shadowRoot.querySelector('.card'); const panel=document.createElement('div');
     panel.className='queue-panel'; panel.id='queuePanel';
     const state=this._hass.states[this._selectedPlayer];
-    const artPath=state?.attributes.entity_picture_local||state?.attributes.entity_picture||null;
+    const artPath=this._imageUrl(state?.attributes.entity_picture_local||state?.attributes.entity_picture);
     const title=state?.attributes.media_title||'Queue',artist=state?.attributes.media_artist||'';
     const queueArtStyle = artPath ? `background-image:url("${artPath}");background-size:cover;background-position:center;` : '';
     const queueArtContent = artPath ? '' : '&#9834;&#xFE0E;';
     panel.innerHTML=`<div class="queue-header"><div class="queue-art" style="${queueArtStyle}">${queueArtContent}</div><div class="queue-title-wrap"><div class="queue-title" id="qTitle">${this._esc(title)}</div><div class="queue-subtitle" id="qSub">${this._esc(artist)}</div></div><button class="queue-close" id="qClose">&#x2715;&#xFE0E;</button></div><div class="queue-scroll" id="qScroll"><div class="state-box"><div class="spinner"></div></div></div>`;
     card.appendChild(panel); panel.querySelector('#qClose').addEventListener('click',()=>this._hideQueue());
     try {
-      if(!await this._waitForWS()) throw new Error('Queue view needs the MA access token (ma_token) configured, and your browser must be able to reach the MA server directly.');
+      if(!await this._waitForWS()) throw new Error('Queue view needs the MA access token (ma_token) configured, and a working MA connection (ingress or HTTPS).');
       const queueId=this._hass.states[this._selectedPlayer]?.attributes?.active_queue;
       if(!queueId) throw new Error('No active queue found');
       const queueState=await this._wsSend('player_queues/get',{queue_id:queueId});
@@ -1204,6 +1934,38 @@ class MABrowserCard extends HTMLElement {
         this._loadImgInto(url,el,ph);
       });
       setTimeout(()=>{const active=qScroll.querySelector('.queue-item.active');if(active)active.scrollIntoView({block:'center',behavior:'smooth'});},100);
+
+      // Play a track out of sequence: click any queue row to jump playback to it.
+      let jumping = false;
+      qScroll.querySelectorAll('.queue-item').forEach((el, i) => {
+        const item = queueItems[i];
+        if (!item) return;
+        if (item.sort_index === currentIndex) { el.style.cursor = 'default'; return; }
+        el.addEventListener('click', () => {
+          if (jumping) return;
+          jumping = true;
+          this._wsSend('player_queues/play_index', { queue_id: queueId, index: item.queue_item_id })
+            .then(() => this._wsSend('player_queues/get', { queue_id: queueId }))
+            .then(q => {
+              // play_index leaves an idle queue idle; start playback if needed
+              if (q?.state !== 'playing') return this._wsSend('player_queues/play', { queue_id: queueId });
+            })
+            .then(() => {
+              this._lastNpKey = '';
+              this._updateNowPlaying();
+              setTimeout(() => {
+                if (!this._queueVisible) return; // user closed the panel meanwhile
+                this._hideQueue();
+                this._showQueue();
+              }, 1200);
+            })
+            .catch(e => {
+              console.warn('[MA Card] queue jump failed:', e);
+              this._toast(`Couldn\u2019t jump to track: ${e.message}`);
+            })
+            .finally(() => { jumping = false; });
+        });
+      });
     } catch(e){const qs=panel.querySelector('#qScroll');if(qs)qs.innerHTML=`<div class="state-box"><div class="err-txt">${e.message}</div></div>`;}
   }
   _hideQueue(){this._queueVisible=false;const p=this.shadowRoot.getElementById('queuePanel');if(p)p.remove();}
@@ -1224,8 +1986,9 @@ class MABrowserCard extends HTMLElement {
     return `rgb(220,${Math.round(100-100*(pct-75)/25)},0)`;
   }
   _startPoll() {
+    clearInterval(this._pollTimer); clearInterval(this._progressTimer);
     this._updateNowPlaying();
-    this._pollTimer=setInterval(()=>this._updateNowPlaying(),2000);
+    this._pollTimer=setInterval(()=>{this._autoFollow();this._updateNowPlaying();},2000);
     this._progressTimer=setInterval(()=>this._tickProgress(),500);
   }
   _tickProgress() {
@@ -1250,7 +2013,7 @@ class MABrowserCard extends HTMLElement {
     repeatBtn.title=`Repeat: ${repeat}`;
     this._$('npTitle').textContent=state.attributes.media_title||'Nothing playing';
     this._$('npArtist').textContent=state.attributes.media_artist||'\u2014';
-    const artPath=state.attributes.entity_picture_local||state.attributes.entity_picture||null;
+    const artPath=this._imageUrl(state.attributes.entity_picture_local||state.attributes.entity_picture);
     const artEl=this._$('npArt');
     if(artPath){
       if(artEl.dataset.src!==artPath){
@@ -1273,9 +2036,17 @@ class MABrowserCard extends HTMLElement {
     const contentId=state.attributes.media_content_id||'';
     if(contentId!==this._nowPlayingUri){this._nowPlayingUri=contentId;this._highlightNowPlaying();}
   }
+  connectedCallback() {
+    if (this._built && this._hass) {
+      document.addEventListener('click', this._boundDismissCtx);
+      this._init();
+    }
+  }
   disconnectedCallback() {
+    this._stopMA();
     clearInterval(this._pollTimer);clearInterval(this._progressTimer);clearTimeout(this._searchTimer);
     if(this._imgObserver){this._imgObserver.disconnect();this._imgObserver=null;}
+    this._lazyStop();
     if(this._ws){this._ws.onclose=null;this._ws.close();this._ws=null;}
     this._imgCache={};this._libCache={};
     document.removeEventListener('click',this._boundDismissCtx);
@@ -1335,16 +2106,33 @@ const EDITOR_CSS = `
   input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;margin-top:-8px;border-radius:50%;background:var(--primary-color,#03a9f4);cursor:pointer;border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,.3);}
   input[type=range]::-moz-range-track{height:4px;border-radius:2px;background:var(--divider-color,#ddd);}
   input[type=range]::-moz-range-thumb{width:20px;height:20px;border-radius:50%;background:var(--primary-color,#03a9f4);cursor:pointer;border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,.3);}
+  .color-field{margin-bottom:14px;}
+  .color-field-row{display:flex;align-items:center;gap:10px;}
+  .color-swatch{width:44px;height:34px;padding:0;border:1px solid var(--divider-color,#ccc);border-radius:6px;cursor:pointer;background:none;flex-shrink:0;}
+  .color-hex{flex:1;padding:8px 10px;font-size:13px;font-family:monospace;background:var(--card-background-color,#fff);color:var(--primary-text-color,#000);border:1px solid var(--divider-color,#ccc);border-radius:4px;box-sizing:border-box;}
+  .color-hex:focus{outline:none;border-color:var(--primary-color,#03a9f4);}
+  .order-list{border:1px solid var(--divider-color,#ccc);border-radius:6px;overflow:hidden;margin-bottom:6px;}
+  .order-row{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--card-background-color,#fff);}
+  .order-row:not(:last-child){border-bottom:1px solid var(--divider-color,#eee);}
+  .order-label{font-size:12.5px;color:var(--primary-text-color);}
+  .order-btns{display:flex;gap:4px;}
+  .order-btn{width:26px;height:26px;border:1px solid var(--divider-color,#ccc);border-radius:4px;background:var(--secondary-background-color,#f5f5f5);color:var(--primary-text-color);cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center;font-family:inherit;}
+  .order-btn:hover:not(:disabled){background:var(--primary-color,#03a9f4);color:#fff;border-color:var(--primary-color,#03a9f4);}
+  .order-btn:disabled{opacity:.3;cursor:default;}
 `;
+
+const DEFAULT_CUSTOM_COLORS = { accent:'#e5a00d', background:'#111113', surface:'#222228', elevated:'#2e2e38', text:'#f0f0f5', text_nav:'#9898aa', other_text:'#55555f', border:'#ffffff12' };
 
 class MABrowserCardEditor extends HTMLElement {
   constructor(){super();this.attachShadow({mode:'open'});this._config={};this._pendingTimer=null;}
-  set hass(hass){this._hass=hass;}
+  set hass(hass){const first=!this._hass;this._hass=hass;if(first&&this._config&&Object.keys(this._config).length)this._render();}
   setConfig(config){this._config={...config};this._render();}
   _fire(config){clearTimeout(this._pendingTimer);this._pendingTimer=setTimeout(()=>{this.dispatchEvent(new CustomEvent('config-changed',{detail:{config},bubbles:true,composed:true}));},800);}
   _fireNow(config){clearTimeout(this._pendingTimer);this.dispatchEvent(new CustomEvent('config-changed',{detail:{config},bubbles:true,composed:true}));}
   _set(key,value,immediate=true){const c={...this._config};if(value===''||value===undefined||value===null)delete c[key];else c[key]=value;this._config=c;immediate?this._fireNow(c):this._fire(c);}
   _setSection(key,value,immediate=false){const c={...this._config},sec={...(c.home_sections||{})};if(value===null)delete sec[key];else sec[key]=value;if(!Object.keys(sec).length)delete c.home_sections;else c.home_sections=sec;this._config=c;immediate?this._fireNow(c):this._fire(c);}
+  _setColor(key,value,immediate=true){const c={...this._config},cc={...(c.custom_colors||{})};if(value===undefined||value===null||value==='')delete cc[key];else cc[key]=value;if(!Object.keys(cc).length)delete c.custom_colors;else c.custom_colors=cc;this._config=c;immediate?this._fireNow(c):this._fire(c);}
+  _setOrder(configKey,order,immediate=true){const c={...this._config};c[configKey]=order;this._config=c;immediate?this._fireNow(c):this._fire(c);}
   _v(key,def){return this._config[key]!==undefined?this._config[key]:def;}
   _esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
@@ -1353,12 +2141,19 @@ class MABrowserCardEditor extends HTMLElement {
     const sp=this._v('sidebar_position','left'),pp=this._v('player_position','bottom');
     const th=this._v('theme','auto'),ca=this._v('click_action','play'),st=this._v('show_title',true);
     const spc=this._v('show_podcasts',false),sab=this._v('show_audiobooks',false);
+    const mpOpts=Object.keys(this._hass?.states||{}).filter(e=>e.startsWith('media_player.')).sort()
+      .map(e=>({value:e,label:(this._hass.states[e].attributes.friendly_name||e)+' ('+e+')'}));
+    if(c.default_player&&!mpOpts.some(o=>o.value===c.default_player)) mpOpts.push({value:c.default_player,label:c.default_player});
+    mpOpts.unshift({value:'',label:'None (top of the list)'});
+    const colorsEnabled=!!c.custom_colors;
+    const ccVals={...DEFAULT_CUSTOM_COLORS,...(c.custom_colors||{})};
     this.shadowRoot.innerHTML='<style>'+EDITOR_CSS+'</style><div class="editor">'
       +'<div class="section-title">Required</div>'
-      +this._textField('config_entry_id','Config Entry ID *',c.config_entry_id||'','01JXXX...','Settings \u2192 Devices &amp; Services \u2192 Devices \u2192 Music Assistant \u2192 click the &#8942; (three-dot) menu \u2192 Copy entity ID')
-      +this._textField('ma_url','MA Server URL *',c.ma_url||'','http://192.168.1.x:8095','Your Music Assistant server address including port')
+      +this._textField('config_entry_id','Config Entry ID *',c.config_entry_id||'','01JXXX...','Settings \u2192 Devices &amp; Services \u2192 Music Assistant integration \u2192 three-dot menu \u2192 Copy entry ID')
+      +this._textField('ma_addon_slug','MA add-on slug (secure ingress)',c.ma_addon_slug||'','d5369777_music_assistant','Routes MA data and artwork through Home Assistant; requires the MA add-on')
+      +this._textField('ma_url','MA Server URL',c.ma_url||'','http://192.168.1.x:8095','Original MA address including port; optional with ingress, useful for rewriting artwork URLs')
       +'<div class="section-title">Recommended</div>'
-      +this._pwField('ma_token','MA Access Token',c.ma_token||'','eyJ...','MA \u2192 Profile \u2192 Access Tokens \u2014 enables Recently Played &amp; Recently Added')
+      +this._pwField('ma_token','MA Access Token',c.ma_token||'','eyJ...','MA \u2192 Profile \u2192 Access Tokens \u2014 enables Recently Played &amp; Recently Added, Browse, Queue view and Add/Remove favourites')
       +'<div class="section-title">Layout</div>'
       +'<div class="field-row"><label>Sidebar position</label><select id="sidebar_position"><option value="left"'+(sp==='left'?' selected':'')+'>Left (default)</option><option value="top"'+(sp==='top'?' selected':'')+'>Top (horizontal nav bar)</option></select></div>'
       +'<div class="field-row"><label>Player position</label><select id="player_position"><option value="bottom"'+(pp==='bottom'?' selected':'')+'>Bottom (default)</option><option value="top"'+(pp==='top'?' selected':'')+'>Top</option></select><div class="hint">In top sidebar mode: bottom pins player to card bottom</div></div>'
@@ -1371,11 +2166,26 @@ class MABrowserCardEditor extends HTMLElement {
       +this._textField('title','Title text',c.title||'','Music','')
       +this._textField('subtitle','Subtitle text',c.subtitle||'','Music Assistant','')
       +this._textField('icon','Icon',c.icon||'','mdi:music','Any MDI icon e.g. mdi:speaker, mdi:headphones, mdi:radio')
+      +'<div class="section-title">Custom Colours</div>'
+      +'<div class="toggle-row"><div><div class="toggle-label">Override theme colours</div><div class="toggle-hint">Set your own palette instead of the theme above. Has little effect on the Retro theme, which uses fixed colours.</div></div><label class="toggle-switch"><input type="checkbox" id="colors_enabled"'+(colorsEnabled?' checked':'')+' /><span class="toggle-track"></span></label></div>'
+      +'<div id="colorFields" style="'+(colorsEnabled?'':'display:none')+'">'
+      +this._colorField('accent','Accent',ccVals.accent,'Highlights, play button, active nav, progress bar')
+      +this._colorField('background','Background',ccVals.background,'Outer card background')
+      +this._colorField('surface','Surface',ccVals.surface,'Sidebar, artwork placeholders, search bar, controls')
+      +this._colorField('elevated','Elevated surface',ccVals.elevated,'Track art tiles, hover/active backgrounds')
+      +this._colorField('text','Primary text',ccVals.text,'Titles and main text')
+      +this._colorField('text_nav','Nav text',ccVals.text_nav,'Nav button text')
+      +this._colorField('other_text','Other text',ccVals.other_text,'Other/tertiary text')
+      +this._colorField('border','Border',ccVals.border,'Borders and dividers')
+      +'</div>'
       +'<div class="section-title">Behaviour</div>'
       +'<div class="field-row"><label>Single click action</label><select id="click_action"><option value="play"'+(ca==='play'?' selected':'')+'>Play immediately (default)</option><option value="enqueue"'+(ca==='enqueue'?' selected':'')+'>Add to queue</option><option value="browse"'+(ca==='browse'?' selected':'')+'>Browse (show tracks)</option></select><div class="hint">Browse opens an album or playlist\u2019s track list instead of playing it (artists already open their albums this way). Requires an MA access token. Also available any time via right-click / long-press \u2192 "Browse tracks", regardless of this setting</div></div>'
       +'<div class="section-title">Content Types</div>'
       +'<div class="toggle-row"><div><div class="toggle-label">Show Podcasts</div><div class="toggle-hint">Adds a Podcasts section to the sidebar and search</div></div><label class="toggle-switch"><input type="checkbox" id="show_podcasts"'+(spc?' checked':'')+' /><span class="toggle-track"></span></label></div>'
       +'<div class="toggle-row"><div><div class="toggle-label">Show Audiobooks</div><div class="toggle-hint">Adds an Audiobooks section to the sidebar and search</div></div><label class="toggle-switch"><input type="checkbox" id="show_audiobooks"'+(sab?' checked':'')+' /><span class="toggle-track"></span></label></div>'
+      +'<div class="section-title">Search Results Order</div>'
+      +'<div class="hint" style="margin-bottom:10px;font-size:12px">Order sections appear in on the search results screen</div>'
+      +this._orderField('search_order',DEFAULT_SEARCH_ORDER,SEARCH_ORDER_LABELS)
       +'<div class="section-title">Home Screen Sections</div>'
       +'<div class="hint" style="margin-bottom:14px;font-size:12px">Set a section to 0 to hide it entirely</div>'
       +this._sliderField('sec_favourite_playlists','Favourite playlists',sec.favourite_playlists??0,0,50,1,'','favourited playlists in MA')
@@ -1388,7 +2198,16 @@ class MABrowserCardEditor extends HTMLElement {
       +this._sliderField('sec_discover','Discover (random)',sec.discover??20,0,50,1,'','')
       +this._sliderField('sec_continue_podcasts','Up next (podcasts)',sec.continue_podcasts??10,0,30,1,'','requires ma_token + Show Podcasts \u2014 checks this many favourited podcasts for their next unfinished episode')
       +this._sliderField('sec_continue_audiobooks','Continue listening (audiobooks)',sec.continue_audiobooks??10,0,30,1,'','requires ma_token + Show Audiobooks')
+      +'<div class="section-title">Home Screen Order</div>'
+      +'<div class="hint" style="margin-bottom:10px;font-size:12px">Order sections appear in on the home screen, top to bottom (hidden sections above are simply skipped)</div>'
+      +this._orderField('home_order',DEFAULT_HOME_ORDER,HOME_ORDER_LABELS)
       +'<div class="section-title">Players</div>'
+      +this._toggleField('auto_follow','Auto-follow playing player','Select whichever player is playing. If none, use the player in this device\u2019s area, else the top of the list',this._v('auto_follow',true))
+      +this._sliderField('manual_hold_minutes','Manual selection hold',this._v('manual_hold_minutes',5),0,60,1,'min','How long a manually chosen player overrides auto-follow. 0 = until the page is reloaded')
+      +this._toggleField('use_app_area','Use this device\u2019s area','When nothing is playing, select the first player in the same area as the device running this card',this._v('use_app_area',true))
+      +this._selectField('default_player','Default player',mpOpts,c.default_player||'','Used when nothing is playing and no area player applies')
+      +this._textField('area','Area override (optional)',c.area||'','e.g. kitchen','Area name or ID. Normally detected automatically; can also be set per device with ?area=kitchen on the dashboard URL')
+      +this._toggleField('show_all_playing_players','Show all playing players','Strip above the player bar listing everything playing, with artwork. Sync groups appear once',this._v('show_all_playing_players',true))
       +this._textField('players','Player entity IDs',(c.players||[]).join(', '),'Leave blank to auto-detect all MA players','Comma-separated e.g. media_player.kitchen, media_player.lounge')
       +'</div>';
     this._attachListeners();
@@ -1396,9 +2215,30 @@ class MABrowserCardEditor extends HTMLElement {
 
   _textField(id,label,value,placeholder,hint){return '<div class="field-row"><label>'+label+'</label><input type="text" id="'+id+'" value="'+this._esc(value)+'" placeholder="'+this._esc(placeholder)+'" />'+(hint?'<div class="hint">'+hint+'</div>':'')+'</div>';}
   _pwField(id,label,value,placeholder,hint){return '<div class="field-row"><label>'+label+'</label><input type="password" id="'+id+'" value="'+this._esc(value)+'" placeholder="'+this._esc(placeholder)+'" />'+(hint?'<div class="hint">'+hint+'</div>':'')+'</div>';}
+  _selectField(id,label,options,value,hint){
+    return '<div class="field-row"><label>'+label+'</label><select id="'+id+'">'+options.map(o=>'<option value="'+this._esc(o.value)+'"'+(o.value===value?' selected':'')+'>'+this._esc(o.label)+'</option>').join('')+'</select>'+(hint?'<div class="hint">'+hint+'</div>':'')+'</div>';
+  }
+  _toggleField(id,label,hint,checked){
+    return '<div class="toggle-row"><div><div class="toggle-label">'+label+'</div>'+(hint?'<div class="toggle-hint">'+hint+'</div>':'')+'</div><label class="toggle-switch"><input type="checkbox" id="'+id+'"'+(checked?' checked':'')+' /><span class="toggle-track"></span></label></div>';
+  }
   _sliderField(id,label,value,min,max,step,unit,hint){
     const isZero=(value===0&&min===0&&id.indexOf('sec_')===0);
     return '<div class="slider-row"><div class="slider-header"><span class="slider-label">'+label+'</span><input type="number" class="slider-number" id="'+id+'_num" min="'+min+'" max="'+max+'" step="'+step+'" value="'+value+'" />'+(unit?'<span class="slider-unit">'+unit+'</span>':'')+'</div><div class="range-wrap"><input type="range" id="'+id+'" min="'+min+'" max="'+max+'" step="'+step+'" value="'+value+'" /></div>'+(hint?'<div class="slider-hint">'+hint+'</div>':'')+(isZero?'<div class="zero-hint">&#x26A0; This section is hidden</div>':'')+'</div>';
+  }
+  _colorField(id,label,value,hint){
+    return '<div class="color-field"><label>'+label+'</label><div class="color-field-row"><input type="color" class="color-swatch" id="color_'+id+'" value="'+this._esc(value)+'" /><input type="text" class="color-hex" id="color_'+id+'_hex" value="'+this._esc(value)+'" maxlength="7" /></div>'+(hint?'<div class="hint">'+hint+'</div>':'')+'</div>';
+  }
+  _orderField(configKey,defaultOrder,labels){
+    const order=resolveOrder(this._config[configKey],defaultOrder,labels);
+    const rows=order.map((key,i)=>
+      '<div class="order-row" data-key="'+key+'">'
+      +'<span class="order-label">'+labels[key]+'</span>'
+      +'<div class="order-btns">'
+      +'<button type="button" class="order-btn" data-config-key="'+configKey+'" data-dir="up"'+(i===0?' disabled':'')+'>&#x25B2;</button>'
+      +'<button type="button" class="order-btn" data-config-key="'+configKey+'" data-dir="down"'+(i===order.length-1?' disabled':'')+'>&#x25BC;</button>'
+      +'</div></div>'
+    ).join('');
+    return '<div class="order-list">'+rows+'</div>';
   }
 
   _attachListeners() {
@@ -1406,14 +2246,15 @@ class MABrowserCardEditor extends HTMLElement {
     sr.addEventListener('pointerdown',e=>e.stopPropagation());
     sr.addEventListener('mousedown',e=>e.stopPropagation());
     sr.addEventListener('touchstart',e=>e.stopPropagation(),{passive:true});
-    ['config_entry_id','ma_url','title','subtitle','icon'].forEach(id=>{const el=sr.getElementById(id);if(el)el.addEventListener('change',()=>self._set(id,el.value.trim()||undefined));});
+    ['config_entry_id','ma_url','ma_addon_slug','title','subtitle','icon','area'].forEach(id=>{const el=sr.getElementById(id);if(el)el.addEventListener('change',()=>self._set(id,el.value.trim()||undefined));});
     const tokenEl=sr.getElementById('ma_token');if(tokenEl)tokenEl.addEventListener('change',()=>self._set('ma_token',tokenEl.value.trim()||undefined));
     const playersEl=sr.getElementById('players');if(playersEl)playersEl.addEventListener('change',()=>{const val=playersEl.value.trim();self._set('players',val?val.split(',').map(s=>s.trim()).filter(Boolean):undefined);});
-    ['sidebar_position','player_position','theme','click_action'].forEach(id=>{const el=sr.getElementById(id);if(el)el.addEventListener('change',()=>self._set(id,el.value));});
+    ['sidebar_position','player_position','theme','click_action','default_player'].forEach(id=>{const el=sr.getElementById(id);if(el)el.addEventListener('change',()=>self._set(id,el.value));});
     const showTitle=sr.getElementById('show_title');if(showTitle)showTitle.addEventListener('change',()=>self._set('show_title',showTitle.checked));
     const showPodcasts=sr.getElementById('show_podcasts');if(showPodcasts)showPodcasts.addEventListener('change',()=>self._set('show_podcasts',showPodcasts.checked));
+    ['auto_follow','use_app_area','show_all_playing_players'].forEach(id=>{const el=sr.getElementById(id);if(el)el.addEventListener('change',()=>self._set(id,el.checked));});
     const showAudiobooks=sr.getElementById('show_audiobooks');if(showAudiobooks)showAudiobooks.addEventListener('change',()=>self._set('show_audiobooks',showAudiobooks.checked));
-    ['height','sidebar_width','tile_size'].forEach(id=>{
+    ['height','sidebar_width','tile_size','manual_hold_minutes'].forEach(id=>{
       const slider=sr.getElementById(id),numBox=sr.getElementById(id+'_num');if(!slider||!numBox)return;
       slider.addEventListener('input',()=>{numBox.value=slider.value;self._set(id,+slider.value,false);});
       numBox.addEventListener('change',()=>{const v=Math.min(+slider.max,Math.max(+slider.min,+numBox.value));slider.value=v;numBox.value=v;self._set(id,v,true);});
@@ -1423,6 +2264,50 @@ class MABrowserCardEditor extends HTMLElement {
       const key=secMap[elId],slider=sr.getElementById(elId),numBox=sr.getElementById(elId+'_num');if(!slider||!numBox)return;
       slider.addEventListener('input',()=>{numBox.value=slider.value;const zh=slider.closest('.slider-row').querySelector('.zero-hint');if(zh)zh.style.display=(+slider.value===0)?'':'none';self._setSection(key,+slider.value,false);});
       numBox.addEventListener('change',()=>{const v=Math.min(+slider.max,Math.max(+slider.min,+numBox.value));slider.value=v;numBox.value=v;const zh=slider.closest('.slider-row').querySelector('.zero-hint');if(zh)zh.style.display=(v===0)?'':'none';self._setSection(key,v,true);});
+    });
+    const colorsEnabledEl=sr.getElementById('colors_enabled');
+    if(colorsEnabledEl){
+      colorsEnabledEl.addEventListener('change',()=>{
+        const fieldsDiv=sr.getElementById('colorFields');
+        if(colorsEnabledEl.checked){
+          if(fieldsDiv)fieldsDiv.style.display='';
+          const c={...self._config};
+          if(!c.custom_colors) c.custom_colors={...DEFAULT_CUSTOM_COLORS};
+          self._config=c; self._fireNow(c);
+        } else {
+          if(fieldsDiv)fieldsDiv.style.display='none';
+          const c={...self._config}; delete c.custom_colors; self._config=c; self._fireNow(c);
+        }
+      });
+    }
+    Object.keys(DEFAULT_CUSTOM_COLORS).forEach(key=>{
+      const colorInput=sr.getElementById('color_'+key), hexInput=sr.getElementById('color_'+key+'_hex');
+      if(!colorInput||!hexInput) return;
+      colorInput.addEventListener('input',()=>{hexInput.value=colorInput.value;self._setColor(key,colorInput.value,false);});
+      colorInput.addEventListener('change',()=>self._setColor(key,colorInput.value,true));
+      hexInput.addEventListener('change',()=>{
+        let v=hexInput.value.trim();
+        if(/^#[0-9a-fA-F]{6}$/.test(v)){colorInput.value=v;self._setColor(key,v,true);}
+        else{hexInput.value=colorInput.value;}
+      });
+    });
+    sr.querySelectorAll('.order-btn').forEach(btn=>{
+      btn.addEventListener('click',()=>{
+        const configKey=btn.dataset.configKey;
+        const dir=btn.dataset.dir;
+        const row=btn.closest('.order-row');
+        const key=row?.dataset.key;
+        if(!key) return;
+        const defaultOrder = configKey==='home_order' ? DEFAULT_HOME_ORDER : DEFAULT_SEARCH_ORDER;
+        const labels       = configKey==='home_order' ? HOME_ORDER_LABELS  : SEARCH_ORDER_LABELS;
+        const order=resolveOrder(self._config[configKey],defaultOrder,labels);
+        const idx=order.indexOf(key);
+        const swapIdx=dir==='up'?idx-1:idx+1;
+        if(idx<0||swapIdx<0||swapIdx>=order.length) return;
+        [order[idx],order[swapIdx]]=[order[swapIdx],order[idx]];
+        self._setOrder(configKey,order,true);
+        self._render();
+      });
     });
   }
 }
