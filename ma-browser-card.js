@@ -1,5 +1,5 @@
 /**
- * MA Browser Card  v3.11.3
+ * MA Browser Card  v3.11.4
  * A full-featured Music Assistant browser card for Home Assistant
  * GitHub: https://github.com/PMizz13/ma-browser-card
  *
@@ -474,7 +474,7 @@ class MABrowserCard extends HTMLElement {
     super();
     this.attachShadow({ mode: 'open' });
     this._hass = null; this._config = {}; this._maUrl = '';
-    this._view = 'home'; this._players = []; this._selectedPlayer = null;
+    this._view = 'home'; this._navStack = []; this._curScreen = null; this._players = []; this._selectedPlayer = null;
     this._pollTimer = null; this._searchTimer = null; this._built = false;
     this._imgCache = {}; this._imgObserver = null;
     this._libCache = {}; this._libCacheTTL = 300000;
@@ -640,13 +640,14 @@ class MABrowserCard extends HTMLElement {
       clearBtn.classList.toggle('visible', q.length > 0);
       clearTimeout(this._searchTimer);
       this._searchTimer = setTimeout(() => {
+        this._navStack = [];
         q.trim() ? this._renderGlobalSearch(q.trim()) : this._renderView(this._view);
       }, 400);
     };
     searchEl.addEventListener('input', searchHandler);
     searchEl.addEventListener('keyup', searchHandler);
     searchEl.addEventListener('keydown', e => e.stopPropagation());
-    clearBtn.addEventListener('click', () => { searchEl.value = ''; clearBtn.classList.remove('visible'); this._renderView(this._view); });
+    clearBtn.addEventListener('click', () => { searchEl.value = ''; clearBtn.classList.remove('visible'); this._navStack = []; this._renderView(this._view); });
     this.shadowRoot.getElementById('playerSel').addEventListener('change', e => {
       const v = e.target.value;
       if (v) this._selectPlayer(v, true); else this._selectedPlayer = null;
@@ -706,7 +707,18 @@ class MABrowserCard extends HTMLElement {
   }
   _esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   _fmtDur(sec) { if(!sec) return''; return `${Math.floor(sec/60)}:${String(Math.floor(sec%60)).padStart(2,'0')}`; }
-  _artUrl(item) { if(!item) return null; return this._imageUrl(item.image||item.image_url||item.album?.image||item.album?.image_url); }
+  _artUrl(item) {
+    if(!item) return null;
+    const direct=this._imageUrl(item.image||item.image_url||item.album?.image||item.album?.image_url);
+    if(direct) return direct;
+    // Items from the direct MA WebSocket carry image as an object (or only metadata.images),
+    // not a URL string, so resolve those through the MA image proxy.
+    if(this._maUrl){
+      const viaMa=this._maItemArtUrl(item)||(item.album?this._maItemArtUrl(item.album):null);
+      if(viaMa) return viaMa;
+    }
+    return null;
+  }
   _artistName(item) { return item?.artists?.length ? item.artists.map(a=>a.name).join(', ') : ''; }
   // Favourite state carried on the rendered element so the context menu can
   // be contextual without another lookup. Absent = MA didn't report one.
@@ -849,7 +861,7 @@ class MABrowserCard extends HTMLElement {
   //   onDone     optional callback when the list is known to be complete
   _mountLazy({items, render, fetchMore=null, done=true, onDone=null}) {
     this._lazyStop();
-    const section=this._scroll().querySelector('.section'); if(!section) return;
+    const secs=this._scroll().querySelectorAll('.section'); const section=secs[secs.length-1]; if(!section) return;
     const wrap=section.lastElementChild; if(!wrap) return;
     const badge=section.querySelector('.sec-count');
     const st={items, rendered:0, done:done||!fetchMore, gone:false, pending:null, size:this._pageSize()};
@@ -1399,12 +1411,13 @@ class MABrowserCard extends HTMLElement {
     this.shadowRoot.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
     if(btn) btn.classList.add('active');
     this._$('searchInp').value=''; this._$('searchClear').classList.remove('visible');
-    clearTimeout(this._searchTimer);
+    clearTimeout(this._searchTimer); this._navStack = [];
     if(this._imgObserver) this._imgObserver.disconnect();
     if(this._queueVisible) this._hideQueue();
     this._renderView(view);
   }
   _renderView(view) {
+    this._curScreen = () => this._renderView(view);
     switch(view){
       case 'home':return this._renderHome(); case 'radio':return this._renderRadio();
       case 'albums':return this._renderAlbums(); case 'artists':return this._renderArtists();
@@ -1414,9 +1427,10 @@ class MABrowserCard extends HTMLElement {
   }
 
   async _renderGlobalSearch(q) {
+    this._curScreen = () => this._renderGlobalSearch(q);
     this._loading();
     try {
-      const res=await this._search(q);
+      const res=await this._search(q,50);
       const albums=res.albums??[],artists=res.artists??[],tracks=res.tracks??[],radio=res.radio??[],playlists=res.playlists??[];
       const podcasts=res.podcasts??[],audiobooks=res.audiobooks??[];
       const sectionDefs = {
@@ -1512,6 +1526,7 @@ class MABrowserCard extends HTMLElement {
   async _renderAlbums() { return this._renderLibraryList({title:'All Albums',mediaType:'album',wrapClass:'album-grid',cardFn:a=>this._albumCardHtml(a),retry:()=>this._renderAlbums()}); }
   async _renderArtists() { return this._renderLibraryList({title:'All Artists',mediaType:'artist',wrapClass:'artist-grid',cardFn:a=>this._artistCardHtml(a),retry:()=>this._renderArtists()}); }
   async _renderArtistDetail(artistName,artUrl,uri) {
+    this._curScreen = () => this._renderArtistDetail(artistName,artUrl,uri);
     this._loading();
     try {
       let albums=null;
@@ -1519,18 +1534,29 @@ class MABrowserCard extends HTMLElement {
       const parsed=this._parseUri(uri);
       if(parsed&&await this._waitForWS()){
         try {
-          const r=await this._wsSend('music/artists/artist_albums',{item_id:parsed.item_id,provider_instance_id_or_domain:parsed.provider,in_library_only:true});
+          // in_library_only:false = also include albums from configured providers (Spotify etc.), like the native MA UI.
+          const r=await this._wsSend('music/artists/artist_albums',{item_id:parsed.item_id,provider_instance_id_or_domain:parsed.provider,in_library_only:false});
           albums=Array.isArray(r)?r:(r?.items??[]);
+          // Drop exact duplicates (same URI) in case MA returns an album via more than one mapping.
+          const seen=new Set(); albums=albums.filter(a=>{ const k=a.uri||`${a.name}|${a.version||''}|${a.year||''}`; if(seen.has(k)) return false; seen.add(k); return true; });
         } catch(e) { console.warn('[MA Card] artist_albums failed, falling back to search:',e.message); }
       }
-      // Fallback (no ma_token / lookup failed): library-only search, with a much larger limit.
+      // Tracks too, including provider (non-library) ones. Optional: a failure here must not break the page.
+      let artistTracks=[];
+      if(parsed&&await this._waitForWS()){
+        try {
+          const tr=await this._wsSend('music/artists/artist_tracks',{item_id:parsed.item_id,provider_instance_id_or_domain:parsed.provider,in_library_only:false});
+          artistTracks=(Array.isArray(tr)?tr:(tr?.items??[])).slice(0,50);
+        } catch(e) { console.warn('[MA Card] artist_tracks failed:',e.message); }
+      }
+      // Fallback (no ma_token / lookup failed): search across providers, with a much larger limit.
       if(!albums){
-        const res=await this._search(artistName,100,true);
+        const res=await this._search(artistName,100,false);
         albums=(res.albums??[]).filter(a=>this._artistName(a).toLowerCase().includes(artistName.toLowerCase()));
       }
       const ph=this._placeholder('artist');
       const artAttrs=artUrl?`data-img="${this._esc(artUrl)}" data-placeholder-type="artist"`:'';
-      this._scroll().innerHTML=`<div class="artist-hdr"><div class="artist-hero" ${artAttrs}>${ph}</div><div><div class="artist-detail-name">${this._esc(artistName)}</div><button class="artist-detail-back" data-action="back">&#x2190; Back</button></div></div>${albums.length?this._section('Albums','','album-grid',albums.length):'<div class="state-box">No albums found</div>'}`;
+      this._scroll().innerHTML=`<div class="artist-hdr"><div class="artist-hero" ${artAttrs}>${ph}</div><div><div class="artist-detail-name">${this._esc(artistName)}</div><button class="artist-detail-back" data-action="back">&#x2190; Back</button></div></div>${artistTracks.length?this._section('Tracks',artistTracks.map((t,i)=>this._trackRowHtml(t,i+1)).join(''),'track-list',artistTracks.length,this._sectionActions(artistTracks)):''}${albums.length?this._section('Albums','','album-grid',albums.length):(artistTracks.length?'':'<div class="state-box">No albums found</div>')}`;
       this._hydrateImages(); this._attachClickHandler();
       if(albums.length) this._mountLazy({items:albums,render:a=>this._albumCardHtml(a)});
     } catch(e){this._err(e,()=>this._renderArtistDetail(artistName,artUrl,uri));}
@@ -1545,6 +1571,7 @@ class MABrowserCard extends HTMLElement {
   // playing immediately. Requires ma_token (uses the direct MA WebSocket,
   // same as Recently Played/Added) — falls back to playing if unavailable.
   async _renderContentDetail(uri,type,name,artist,artUrl) {
+    this._curScreen = () => this._renderContentDetail(uri,type,name,artist,artUrl);
     this._loading();
     try {
       const parsed=this._parseUri(uri);
@@ -1771,6 +1798,11 @@ class MABrowserCard extends HTMLElement {
     scroll.addEventListener('touchmove',   this._boundTouchMove,  { passive: true });
     scroll.addEventListener('touchend',    this._boundTouchEnd,   { passive: true });
   }
+  _pushScreen() { if(this._curScreen) this._navStack.push(this._curScreen); }
+  _goBack() {
+    const prev = this._navStack.pop();
+    if(prev) prev(); else this._renderView(this._view);
+  }
   _handleClick(e) {
     this._dismissCtx();
     const cardEl=e.target.closest('.album-card')||e.target.closest('.artist-card');
@@ -1779,10 +1811,12 @@ class MABrowserCard extends HTMLElement {
       const type=cardEl.dataset.type;
       if(action==='browse'){
         if(type==='album'||type==='playlist'||type==='podcast'){
+          this._pushScreen();
           this._renderContentDetail(cardEl.dataset.uri,type,cardEl.dataset.name,cardEl.dataset.artist,cardEl.dataset.art);
           return;
         }
         if(type==='artist'){
+          this._pushScreen();
           this._renderArtistDetail(cardEl.dataset.name,cardEl.dataset.art,cardEl.dataset.uri);
           return;
         }
@@ -1803,7 +1837,7 @@ class MABrowserCard extends HTMLElement {
       })();
       return;
     }
-    const backEl=e.target.closest('[data-action="back"]'); if(backEl){this._renderView(this._view);return;}
+    const backEl=e.target.closest('[data-action="back"]'); if(backEl){this._goBack();return;}
   }
   _handleCtx(e) {
     const el=e.target.closest('.album-card')||e.target.closest('.artist-card')||e.target.closest('.track-row');
@@ -1825,6 +1859,7 @@ class MABrowserCard extends HTMLElement {
     menu.querySelectorAll('.ctx-item').forEach(item=>item.addEventListener('click',e=>{
       e.stopPropagation();
       if(item.dataset.browse){
+        this._pushScreen();
         if(type==='artist') this._renderArtistDetail(name,artUrl,uri);
         else this._renderContentDetail(uri,type,name,artist,artUrl);
       }
