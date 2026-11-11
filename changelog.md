@@ -5,6 +5,8 @@
 - Font size is now customisable
 - UI is more standardised using rounded rectangles throughout rather than a mixture of pills and recatngles
 
+Fixed
+- Play all/Shuffle all didn't clear the playlist properly 
 
 ## V 3.11.4
 When searching and the browsing an album/artist/playlist and then click back you are now returned to your search rather than home
