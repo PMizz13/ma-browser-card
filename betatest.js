@@ -905,6 +905,13 @@ class MABrowserCard extends HTMLElement {
     };
     // Used by Play all / Shuffle all so they cover the whole list, not just what's loaded.
     st.loadAll=async()=>{ while(!st.done&&!st.gone) await fetchOnce(); };
+    // Used by Back navigation: make sure at least n items are loaded and rendered so a saved scroll offset is reachable.
+    st.restoreTo=async(n)=>{
+      while(st.items.length<n&&!st.done&&!st.gone) await fetchOnce();
+      while(!st.gone&&st.rendered<n&&st.rendered<st.items.length) renderChunk();
+      updateBadge();
+      if(st.rendered>=st.items.length&&st.done&&!st.gone) finish();
+    };
     const next=async()=>{
       if(st.gone||st.busy) return;
       if(st.rendered<st.items.length) renderChunk();
@@ -1809,10 +1816,20 @@ class MABrowserCard extends HTMLElement {
     scroll.addEventListener('touchmove',   this._boundTouchMove,  { passive: true });
     scroll.addEventListener('touchend',    this._boundTouchEnd,   { passive: true });
   }
-  _pushScreen() { if(this._curScreen) this._navStack.push(this._curScreen); }
-  _goBack() {
+  _pushScreen() {
+    if(!this._curScreen) return;
+    // Remember where the user was in the list so Back can put them there again.
+    this._navStack.push({ fn:this._curScreen, top:this._scroll().scrollTop, rendered:this._lazy?this._lazy.rendered:0 });
+  }
+  async _goBack() {
     const prev = this._navStack.pop();
-    if(prev) prev(); else this._renderView(this._view);
+    if(!prev) { this._renderView(this._view); return; }
+    await prev.fn();
+    // Re-render as many items as were showing before, then jump back to the old scroll offset.
+    if(prev.top>0 && this._lazy && this._lazy.restoreTo) {
+      try { await this._lazy.restoreTo(prev.rendered); } catch(e) { console.warn('[MA Card] scroll restore failed:',e); }
+      this._scroll().scrollTop = prev.top;
+    }
   }
   _handleClick(e) {
     this._dismissCtx();
