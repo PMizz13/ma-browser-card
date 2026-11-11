@@ -1,17 +1,17 @@
 /**
  * MA Browser Card  v3.12.0b
  * A full-featured Music Assistant browser card for Home Assistant
- * GitHub: https://github.com/PMizz13/ma-browser-card-dev
+ * GitHub: https://github.com/PMizz13/ma-browser-card
  *
  * Installation:
- *   1. Copy ma-browser-card-dev.js to /config/www/ma-browser-card-dev.js
+ *   1. Copy ma-browser-card.js to /config/www/ma-browser-card.js
  *   2. HA → Settings → Dashboards → Resources → Add Resource
- *      URL: /local/ma-browser-card-dev.js  |  Type: JavaScript Module
+ *      URL: /local/ma-browser-card.js  |  Type: JavaScript Module
  *   3. Add the card to your dashboard using the config below
  *
  * ── FULL CONFIG REFERENCE ──────────────────────────────────────────────
  *
- *   type: custom:ma-browser-card-dev
+ *   type: custom:ma-browser-card
  *
  *   # Required
  *   config_entry_id: 01JXXX...
@@ -491,10 +491,10 @@ class MABrowserCard extends HTMLElement {
   }
 
   setConfig(config) {
-    if (!config.config_entry_id) throw new Error('ma-browser-card-dev: config_entry_id is required.\nFind it in HA \u2192 Settings \u2192 Devices & Services \u2192 Music Assistant integration \u2192 three-dot menu \u2192 Copy entry ID.');
-    if (!config.ma_url && !config.ma_addon_slug) throw new Error('ma-browser-card-dev: set ma_addon_slug for ingress, or ma_url for a direct connection.');
+    if (!config.config_entry_id) throw new Error('ma-browser-card: config_entry_id is required.\nFind it in HA \u2192 Settings \u2192 Devices & Services \u2192 Music Assistant integration \u2192 three-dot menu \u2192 Copy entry ID.');
+    if (!config.ma_url && !config.ma_addon_slug) throw new Error('ma-browser-card: set ma_addon_slug for ingress, or ma_url for a direct connection.');
     if (config.ma_addon_slug && !/^[a-zA-Z0-9_-]+$/.test(config.ma_addon_slug)) {
-      throw new Error('ma-browser-card-dev: ma_addon_slug must be an add-on slug, not a URL.');
+      throw new Error('ma-browser-card: ma_addon_slug must be an add-on slug, not a URL.');
     }
     this._stopMA();
     this._config = config;
@@ -1643,8 +1643,11 @@ class MABrowserCard extends HTMLElement {
 
   async _playAll(items,shuffle) {
     if(!items.length||!this._selectedPlayer){if(!this._selectedPlayer)alert('Select a player first');return;}
-    // Same guard as _playMedia: don't fire music_assistant.play_media at a non-MA fallback player.
+
     if(this._playersAreFallback){this._toast('Waiting for Music Assistant players\u2026');return;}
+
+    try { await this._hass.callService('media_player','clear_playlist',{entity_id:this._selectedPlayer}); }
+    catch(e) { console.warn('[MA Card] clear_playlist failed:', e); }
     if(shuffle) await this._hass.callService('media_player','shuffle_set',{entity_id:this._selectedPlayer,shuffle:true});
     await this._hass.callService('music_assistant','play_media',{entity_id:this._selectedPlayer,media_id:items[0].uri,media_type:items[0].media_type||'album',enqueue:'play'});
     for(let i=1;i<items.length;i++) await this._hass.callService('music_assistant','play_media',{entity_id:this._selectedPlayer,media_id:items[i].uri,media_type:items[i].media_type||'album',enqueue:'add'});
@@ -2093,22 +2096,22 @@ class MABrowserCard extends HTMLElement {
     document.removeEventListener('click',this._boundDismissCtx);
   }
   getCardSize(){return 6;}
-  static getConfigElement(){return document.createElement('ma-browser-card-dev-editor');}
+  static getConfigElement(){return document.createElement('ma-browser-card-editor');}
   static getStubConfig(){return{config_entry_id:'YOUR_MA_CONFIG_ENTRY_ID',ma_url:'http://YOUR_MA_IP:8095'};}
 }
 
-customElements.define('ma-browser-card-dev', MABrowserCard);
+customElements.define('ma-browser-card', MABrowserCard);
 window.customCards = window.customCards || [];
 window.customCards.push({
-  type:'ma-browser-card-dev', name:'MA Browser Card',
+  type:'ma-browser-card', name:'MA Browser Card',
   description:'A full-featured Music Assistant browser card.',
-  preview:true, documentationURL:'https://github.com/PMizz13/ma-browser-card-dev',
+  preview:true, documentationURL:'https://github.com/PMizz13/ma-browser-card',
   getEntitySuggestion:(hass,entityId)=>{
     if(entityId.split('.')[0]!=='media_player') return null;
     const state=hass.states[entityId];
     const isMassPlayer=state?.attributes.app_id==='music_assistant'||state?.attributes.mass_player_type||state?.attributes.active_queue;
     if(!isMassPlayer) return null;
-    return{label:'MA Browser Card',config:{type:'custom:ma-browser-card-dev',config_entry_id:'YOUR_MA_CONFIG_ENTRY_ID',ma_url:'http://YOUR_MA_IP:8095'}};
+    return{label:'MA Browser Card',config:{type:'custom:ma-browser-card',config_entry_id:'YOUR_MA_CONFIG_ENTRY_ID',ma_url:'http://YOUR_MA_IP:8095'}};
   },
 });
 
@@ -2469,4 +2472,4 @@ class MABrowserCardEditor extends HTMLElement {
   }
 }
 
-customElements.define('ma-browser-card-dev-editor', MABrowserCardEditor);
+customElements.define('ma-browser-card-editor', MABrowserCardEditor);
