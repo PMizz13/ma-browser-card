@@ -1,5 +1,5 @@
 /**
- * MA Browser Card  v3.11.5b
+ * MA Browser Card  v3.12.0b
  * A full-featured Music Assistant browser card for Home Assistant
  * GitHub: https://github.com/PMizz13/ma-browser-card-dev
  *
