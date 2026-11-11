@@ -1,5 +1,14 @@
 # MA Browser Card
 
+## V 3.12.0b
+- When scrolling through a section then drilling down, clicking back will now return you to where you got to rather than the top of the list again
+- Font size is now customisable
+- UI is more standardised using rounded rectangles throughout rather than a mixture of pills and recatngles
+
+
+## V 3.11.4
+When searching and the browsing an album/artist/playlist and then click back you are now returned to your search rather than home
+
 ## V 3.11.3
 Fixed an issue where wrong players were selected after a restart and not refreshed properly
 
