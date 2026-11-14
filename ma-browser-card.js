@@ -52,8 +52,6 @@
  *
  *   # Behaviour
  *   click_action: play              # play | enqueue | browse
- *   artist_album_sort: off          # album order on an artist page: off (as returned by MA, default)
- *                                   #   | year_desc (newest first) | year_asc (oldest first) | alpha (A-Z)
  *                                    #   browse: albums/playlists open their track list instead
  *                                    #   of playing immediately (artists already do this).
  *                                    #   Right-click / long-press always shows the full menu,
@@ -61,6 +59,8 @@
  *                                    #   playlists regardless of this setting. With ma_token set
  *                                    #   it also offers "Add to favourites" / "Remove from
  *                                    #   favourites" (whichever applies) for items MA can favourite.
+ *   artist_album_sort: off          # album order on an artist page: off (as returned by MA, default)
+ *                                   #   | year_desc (newest first) | year_asc (oldest first) | alpha (A-Z)
  *
  *   # Optional content types (off by default)
  *   show_podcasts: false
