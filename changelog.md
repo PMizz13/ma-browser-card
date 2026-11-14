@@ -1,5 +1,17 @@
 # MA Browser Card
 
+## V 3.12.0
+- When scrolling through a section then drilling down, clicking back will now return you to where you got to rather than the top of the list again
+- When searching and the browsing an album/artist/playlist and then click back you are now returned to your search rather than home
+- Font size is now customisable
+- UI is more standardised using rounded rectangles throughout rather than a mixture of pills and recatngles
+- Album sort order within artists is now customisable
+- Players can now be selected in the UI config
+- Order players are shown can be customised
+  
+Fixed
+- Play all/Shuffle all didn't clear the playlist properly 
+
 ## V 3.12.0b
 - When scrolling through a section then drilling down, clicking back will now return you to where you got to rather than the top of the list again
 - Font size is now customisable
