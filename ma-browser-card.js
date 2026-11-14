@@ -1,5 +1,5 @@
 /**
- * MA Browser Card  v3.11.4
+ * MA Browser Card  v3.11.5b
  * A full-featured Music Assistant browser card for Home Assistant
  * GitHub: https://github.com/PMizz13/ma-browser-card
  *
@@ -35,6 +35,8 @@
  *
  *   # Appearance
  *   theme: auto                     # auto | dark | light | retro
+ *   font_size: 13                   # base text size in px (8-28, default 13); all card text
+ *                                   #   scales proportionally with it
  *   title: Music
  *   subtitle: Music Assistant
  *   icon: mdi:music
@@ -50,6 +52,8 @@
  *
  *   # Behaviour
  *   click_action: play              # play | enqueue | browse
+ *   artist_album_sort: off          # album order on an artist page: off (as returned by MA, default)
+ *                                   #   | year_desc (newest first) | year_asc (oldest first) | alpha (A-Z)
  *                                    #   browse: albums/playlists open their track list instead
  *                                    #   of playing immediately (artists already do this).
  *                                    #   Right-click / long-press always shows the full menu,
@@ -131,7 +135,7 @@
  */
 
 const CSS = `
-  :host { display: block; }
+  :host { display: block; --r-sm: 4px; --r-md: 7px; --r-lg: 10px; --ctl-h: 34px; }
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   .card {
     --gold: #e5a00d; --gold-bg: rgba(229,160,13,0.13); --gold-border: rgba(229,160,13,0.25);
@@ -141,7 +145,7 @@ const CSS = `
     --border: rgba(255,255,255,0.07); --sidebar: 195px;
     font-family: 'Outfit', 'Segoe UI', system-ui, sans-serif;
     display: flex; border-radius: 14px; overflow: hidden;
-    background: var(--bg0); color: var(--t1); font-size: 13px;
+    background: var(--bg0); color: var(--t1); font-size:calc(13px * var(--fs,1));
     height: var(--card-height, 580px); position: relative;
   }
   .card.theme-light {
@@ -166,7 +170,7 @@ const CSS = `
     --gold:#22cc00; --gold-bg:rgba(34,204,0,0.1); --gold-border:rgba(34,204,0,0.3);
     --bg0:#c0c0c0; --bg2:#d4d0c8; --bg3:#b0aca4; --bg-sidebar:#b8b4ac; --bg-player:#1a1a1a;
     --t1:#000; --t2:#444; --t3:#888; --border:rgba(0,0,0,0.3);
-    font-family:'Arial','Helvetica',sans-serif; font-size:16px;
+    font-family:'Arial','Helvetica',sans-serif; font-size:calc(16px * var(--fs,1));
   }
   .card.theme-retro,.card.theme-retro .sidebar,.card.theme-retro .logo,
   .card.theme-retro .logo-icon,.card.theme-retro .nav-btn,
@@ -185,20 +189,20 @@ const CSS = `
   .card.theme-retro .logo { background:linear-gradient(180deg,#1a1a1a 0%,#222 100%); border-bottom:2px solid #000; padding:8px 13px; }
   .card.theme-retro .logo-icon { background:#cccc00; border-top:2px solid #ffff88; border-left:2px solid #ffff88; border-bottom:2px solid #666600; border-right:2px solid #666600; }
   .card.theme-retro .logo-icon ha-icon { color:#000; --mdc-icon-color:#000; }
-  .card.theme-retro .logo-name { color:#ffdd00; font-size:13px; font-weight:bold; letter-spacing:.06em; text-transform:uppercase; text-shadow:0 1px 2px rgba(0,0,0,.8); }
-  .card.theme-retro .logo-sub { color:#fff; font-size:9px; letter-spacing:.12em; text-transform:uppercase; text-shadow:0 1px 1px rgba(0,0,0,.8); }
+  .card.theme-retro .logo-name { color:#ffdd00; font-size:calc(13px * var(--fs,1)); font-weight:bold; letter-spacing:.06em; text-transform:uppercase; text-shadow:0 1px 2px rgba(0,0,0,.8); }
+  .card.theme-retro .logo-sub { color:#fff; font-size:calc(9px * var(--fs,1)); letter-spacing:.12em; text-transform:uppercase; text-shadow:0 1px 1px rgba(0,0,0,.8); }
   .card.theme-retro .sidebar { background:linear-gradient(180deg,#202020 0%,#181818 50%,#1e1e1e 100%); border-right:2px solid #3a3a3a; }
-  .card.theme-retro .nav-label { color:#555; font-size:9px; letter-spacing:.15em; text-transform:uppercase; }
-  .card.theme-retro .nav-btn { font-size:11px; color:#787878; background:linear-gradient(180deg,#505050 0%,#2e2e2e 50%,#424242 100%); border-top:2px solid #3a3a3a; border-left:2px solid #3a3a3a; border-bottom:2px solid #080808; border-right:2px solid #080808; margin-bottom:3px; padding-left:22px; position:relative; }
+  .card.theme-retro .nav-label { color:#555; font-size:calc(9px * var(--fs,1)); letter-spacing:.15em; text-transform:uppercase; }
+  .card.theme-retro .nav-btn { font-size:calc(11px * var(--fs,1)); color:#787878; background:linear-gradient(180deg,#505050 0%,#2e2e2e 50%,#424242 100%); border-top:2px solid #3a3a3a; border-left:2px solid #3a3a3a; border-bottom:2px solid #080808; border-right:2px solid #080808; margin-bottom:3px; padding-left:22px; position:relative; }
   .card.theme-retro .nav-btn::before { content:''; position:absolute; left:7px; top:50%; transform:translateY(-50%); width:8px; height:8px; background:#333; border-top:1px solid #111; border-left:1px solid #111; border-bottom:1px solid #888; border-right:1px solid #888; box-shadow:inset 0 0 2px rgba(0,0,0,.5); }
   .card.theme-retro .nav-btn.active::before { background:radial-gradient(circle at 35% 35%,#88ff44,#22cc00 60%,#115500); box-shadow:0 0 4px rgba(34,204,0,.8),inset 0 0 2px rgba(255,255,255,.3); border-top-color:#44ff00; border-left-color:#44ff00; border-bottom-color:#115500; border-right-color:#115500; }
   .card.theme-retro .nav-btn:hover { background:linear-gradient(180deg,#acacac 0%,#8a8a8a 50%,#9e9e9e 100%); color:#000; }
   .card.theme-retro .nav-btn.active { background:linear-gradient(180deg,#acacac 0%,#8a8a8a 50%,#9e9e9e 100%); border-top:2px solid #707068; border-left:2px solid #707068; border-bottom:2px solid #e8e4dc; border-right:2px solid #e8e4dc; color:#000; }
   .card.theme-retro .player-bar { background:linear-gradient(180deg,#1a1a1a 0%,#111 100%); border-top:3px solid #000; }
-  .card.theme-retro .np-title { color:#22cc00; font-size:12px; letter-spacing:.04em; font-weight:bold; }
-  .card.theme-retro .np-artist { color:#158800; font-size:10px; }
-  .card.theme-retro .ps-label { color:#444; font-size:9px; text-transform:uppercase; letter-spacing:.1em; }
-  .card.theme-retro .ctrl-btn { color:#22cc00; font-size:14px; background:linear-gradient(180deg,#505050 0%,#2e2e2e 50%,#424242 100%); border-top:2px solid #3a3a3a; border-left:2px solid #3a3a3a; border-bottom:2px solid #080808; border-right:2px solid #080808; padding:3px 5px; border-radius:0!important; }
+  .card.theme-retro .np-title { color:#22cc00; font-size:calc(12px * var(--fs,1)); letter-spacing:.04em; font-weight:bold; }
+  .card.theme-retro .np-artist { color:#158800; font-size:calc(10px * var(--fs,1)); }
+  .card.theme-retro .ps-label { color:#444; font-size:calc(9px * var(--fs,1)); text-transform:uppercase; letter-spacing:.1em; }
+  .card.theme-retro .ctrl-btn { color:#22cc00; font-size:calc(14px * var(--fs,1)); background:linear-gradient(180deg,#505050 0%,#2e2e2e 50%,#424242 100%); border-top:2px solid #3a3a3a; border-left:2px solid #3a3a3a; border-bottom:2px solid #080808; border-right:2px solid #080808; padding:3px 5px; border-radius:0!important; }
   .card.theme-retro .ctrl-btn:hover { color:#33ee00; background:linear-gradient(180deg,#bcbcbc 0%,#9a9a9a 50%,#aeaeae 100%); }
   .card.theme-retro .ctrl-btn.active { color:#22cc00; text-shadow:0 0 4px rgba(34,204,0,.5); }
   .card.theme-retro .ctrl-btn:active { border-top:2px solid #080808; border-left:2px solid #080808; border-bottom:2px solid #3a3a3a; border-right:2px solid #3a3a3a; }
@@ -211,21 +215,21 @@ const CSS = `
   .card.theme-retro .vol-slider { height:6px; -webkit-appearance:none; appearance:none; background:linear-gradient(to right,var(--vol-color,#22cc00) 0%,var(--vol-color,#22cc00) var(--vol-pct,50%),#1a1a1a var(--vol-pct,50%),#1a1a1a 100%)!important; border-top:1px solid #000; border-bottom:1px solid #444; }
   .card.theme-retro .vol-slider::-webkit-slider-thumb { -webkit-appearance:none; width:10px; height:16px; background:linear-gradient(180deg,#acacac 0%,#8a8a8a 50%,#9e9e9e 100%); border-top:2px solid #ccc; border-left:2px solid #ccc; border-bottom:2px solid #606060; border-right:2px solid #606060; cursor:pointer; border-radius:0!important; }
   .card.theme-retro .vol-slider::-moz-range-thumb { width:12px; height:18px; background:linear-gradient(180deg,#acacac 0%,#8a8a8a 50%,#9e9e9e 100%); border:2px solid #ccc; border-bottom-color:#606060; border-right-color:#606060; cursor:pointer; border-radius:0!important; }
-  .card.theme-retro .vol-icon { color:#22cc00; font-size:14px; }
+  .card.theme-retro .vol-icon { color:#22cc00; font-size:calc(14px * var(--fs,1)); }
   .card.theme-retro .search-wrap { background:#181818; border-top:2px solid #0a0a0a; border-left:2px solid #0a0a0a; border-bottom:2px solid #4a4a4a; border-right:2px solid #4a4a4a; }
-  .card.theme-retro .search-inp { color:#22cc00; font-size:13px; }
+  .card.theme-retro .search-inp { color:#22cc00; font-size:calc(13px * var(--fs,1)); }
   .card.theme-retro .search-inp::placeholder { color:#336633; }
-  .card.theme-retro .player-sel { background:#0f0f0f; border-top:2px solid #000; border-left:2px solid #000; border-bottom:2px solid #333; border-right:2px solid #333; color:#22cc00; font-size:11px; }
+  .card.theme-retro .player-sel { background:#0f0f0f; border-top:2px solid #000; border-left:2px solid #000; border-bottom:2px solid #333; border-right:2px solid #333; color:#22cc00; font-size:calc(11px * var(--fs,1)); }
   .card.theme-retro .main { background:#222; }
   .card.theme-retro .topbar { background:#262626; border-bottom:2px solid #0a0a0a; }
-  .card.theme-retro .a-name { color:#22cc00; font-size:12px; font-weight:bold; }
-  .card.theme-retro .a-artist { color:#777; font-size:11px; }
-  .card.theme-retro .sec-title { font-size:11px; text-transform:uppercase; letter-spacing:.1em; color:#cccc00; font-weight:bold; }
-  .card.theme-retro .sec-count { background:#161616; border:1px solid #3a3a3a; color:#777; font-size:10px; }
+  .card.theme-retro .a-name { color:#22cc00; font-size:calc(12px * var(--fs,1)); font-weight:bold; }
+  .card.theme-retro .a-artist { color:#777; font-size:calc(11px * var(--fs,1)); }
+  .card.theme-retro .sec-title { font-size:calc(11px * var(--fs,1)); text-transform:uppercase; letter-spacing:.1em; color:#cccc00; font-weight:bold; }
+  .card.theme-retro .sec-count { background:#161616; border:1px solid #3a3a3a; color:#777; font-size:calc(10px * var(--fs,1)); }
   .card.theme-retro .a-art-wrap { border-top:2px solid #484848; border-left:2px solid #484848; border-bottom:2px solid #080808; border-right:2px solid #080808; background:#2a2a2a; }
   .card.theme-retro .play-circle { background:#1a1a1a; color:#22cc00; border-top:2px solid #444; border-left:2px solid #444; border-bottom:2px solid #000; border-right:2px solid #000; }
   .card.theme-retro .album-card.now-playing .a-art-wrap { border-top-color:#22cc00; border-left-color:#22cc00; border-bottom-color:#115500; border-right-color:#115500; }
-  .card.theme-retro .sec-btn { font-size:10px; text-transform:uppercase; background:linear-gradient(180deg,#303030 0%,#1e1e1e 100%); color:#aaa; border-top:2px solid #505050; border-left:2px solid #505050; border-bottom:2px solid #080808; border-right:2px solid #080808; }
+  .card.theme-retro .sec-btn { font-size:calc(10px * var(--fs,1)); text-transform:uppercase; background:linear-gradient(180deg,#303030 0%,#1e1e1e 100%); color:#aaa; border-top:2px solid #505050; border-left:2px solid #505050; border-bottom:2px solid #080808; border-right:2px solid #080808; }
   .card.theme-retro .sec-btn:hover { background:linear-gradient(180deg,#3a3a3a 0%,#282828 100%); color:#ccc; }
   .card.theme-retro .track-row:hover { background:rgba(255,255,255,.05); }
   .card.theme-retro .track-row.playing { background:rgba(34,204,0,.12); }
@@ -239,7 +243,7 @@ const CSS = `
   .card.theme-retro .qi-name { color:#22cc00; }
   .card.theme-retro .qi-artist { color:#666; }
   .card.theme-retro .ctx-menu { background:#282828; border-top:2px solid #4a4a4a; border-left:2px solid #4a4a4a; border-bottom:2px solid #080808; border-right:2px solid #080808; box-shadow:3px 3px 0 rgba(0,0,0,.7); }
-  .card.theme-retro .ctx-item { color:#ccc; font-size:12px; }
+  .card.theme-retro .ctx-item { color:#ccc; font-size:calc(12px * var(--fs,1)); }
   .card.theme-retro .ctx-item:hover { background:#000080; color:#fff; }
   .card.theme-retro .spinner { border-color:#888; border-top-color:#22cc00; }
   .card.theme-retro .toast { background:#1a1a1a; color:#22cc00; border:2px solid #4a4a4a; }
@@ -276,49 +280,49 @@ const CSS = `
   /* SIDEBAR */
   .sidebar { width:var(--sidebar); background:var(--bg-sidebar); display:flex; flex-direction:column; flex-shrink:0; border-right:1px solid var(--border); }
   .logo { display:flex; align-items:center; gap:9px; padding:15px 13px 13px; border-bottom:1px solid var(--border); }
-  .logo-icon { width:30px; height:30px; background:var(--gold); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:13px; color:#111; flex-shrink:0; }
-  .logo-name { font-size:14px; font-weight:600; color:var(--t1); letter-spacing:-0.2px; }
-  .logo-sub { font-size:10px; color:var(--t3); }
+  .logo-icon { width:30px; height:30px; background:var(--gold); border-radius:var(--r-md); display:flex; align-items:center; justify-content:center; font-size:calc(13px * var(--fs,1)); color:#111; flex-shrink:0; }
+  .logo-name { font-size:calc(14px * var(--fs,1)); font-weight:600; color:var(--t1); letter-spacing:-0.2px; }
+  .logo-sub { font-size:calc(10px * var(--fs,1)); color:var(--t3); }
   .nav { padding:10px 8px; flex:1; overflow-y:auto; }
-  .nav-label { font-size:9px; text-transform:uppercase; letter-spacing:.1em; color:var(--t3); padding:8px 8px 4px; font-weight:500; }
-  .nav-btn { display:flex; align-items:center; gap:9px; padding:8px; border-radius:7px; cursor:pointer; color:var(--t2); font-size:12.5px; transition:all .14s; margin-bottom:1px; border:1px solid transparent; background:none; width:100%; text-align:left; font-family:inherit; }
+  .nav-label { font-size:calc(9px * var(--fs,1)); text-transform:uppercase; letter-spacing:.1em; color:var(--t3); padding:8px 8px 4px; font-weight:500; }
+  .nav-btn { display:flex; align-items:center; gap:9px; padding:4px 8px; min-height:var(--ctl-h); border-radius:var(--r-md); cursor:pointer; color:var(--t2); font-size:calc(12.5px * var(--fs,1)); transition:all .14s; margin-bottom:1px; border:1px solid transparent; background:none; width:100%; text-align:left; font-family:inherit; }
   .nav-btn:hover { background:var(--bg2); color:var(--t1); }
   .nav-btn.active { background:var(--gold-bg); color:var(--gold); border-color:var(--gold-border); font-weight:500; }
-  .nav-ico { width:16px; text-align:center; font-size:14px; flex-shrink:0; }
+  .nav-ico { width:16px; text-align:center; font-size:calc(14px * var(--fs,1)); flex-shrink:0; }
   /* PLAYER BAR */
   .player-bar { padding:11px; border-top:1px solid var(--border); background:var(--bg-player); }
   .np-row { display:flex; align-items:center; gap:8px; margin-bottom:9px; cursor:pointer; }
-  .np-art { width:38px; height:38px; border-radius:6px; background:var(--bg3); flex-shrink:0; overflow:hidden; display:flex; align-items:center; justify-content:center; font-size:18px; transition:opacity .14s; }
+  .np-art { width:38px; height:38px; border-radius:var(--r-sm); background:var(--bg3); flex-shrink:0; overflow:hidden; display:flex; align-items:center; justify-content:center; font-size:calc(18px * var(--fs,1)); transition:opacity .14s; }
   .np-art:hover { opacity:.8; }
   .np-art img { width:100%; height:100%; object-fit:cover; }
   .np-info { flex:1; min-width:0; }
-  .np-title { font-size:12px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .np-artist { font-size:11px; color:var(--t3); margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .np-title { font-size:calc(12px * var(--fs,1)); font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .np-artist { font-size:calc(11px * var(--fs,1)); color:var(--t3); margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .controls { display:flex; align-items:center; justify-content:center; gap:10px; margin-bottom:8px; }
-  .ctrl-btn { background:none; border:none; color:var(--t2); cursor:pointer; font-size:15px; padding:2px; line-height:1; transition:color .12s; }
+  .ctrl-btn { background:none; border:none; color:var(--t2); cursor:pointer; font-size:calc(15px * var(--fs,1)); padding:2px; line-height:1; transition:color .12s; }
   .ctrl-btn:hover { color:var(--t1); }
   .ctrl-btn.active { color:var(--gold); }
-  .ctrl-play { width:30px; height:30px; background:var(--gold); border-radius:50%; display:flex; align-items:center; justify-content:center; color:#111; font-size:12px; border:none; cursor:pointer; transition:transform .1s; }
+  .ctrl-play { width:30px; height:30px; background:var(--gold); border-radius:50%; display:flex; align-items:center; justify-content:center; color:#111; font-size:calc(12px * var(--fs,1)); border:none; cursor:pointer; transition:transform .1s; }
   .ctrl-play:hover { transform:scale(1.08); }
   .progress-bar { height:3px; background:var(--bg3); border-radius:2px; margin-bottom:10px; cursor:pointer; }
   .progress-fill { height:100%; background:var(--gold); border-radius:2px; width:0; transition:width 1s linear; }
-  .ps-label { font-size:10px; color:var(--t3); margin-bottom:4px; }
-  .player-sel { width:100%; background:var(--bg2); border:1px solid var(--border); color:var(--t1); font-size:11px; padding:5px 7px; border-radius:6px; outline:none; cursor:pointer; font-family:inherit; }
+  .ps-label { font-size:calc(10px * var(--fs,1)); color:var(--t3); margin-bottom:4px; }
+  .player-sel { width:100%; background:var(--bg2); border:1px solid var(--border); color:var(--t1); font-size:calc(11px * var(--fs,1)); padding:5px 7px; border-radius:var(--r-md); outline:none; cursor:pointer; font-family:inherit; }
   .player-sel:focus { border-color:var(--gold); }
   .vol-row { display:flex; align-items:center; gap:7px; margin-top:8px; }
-  .vol-icon { font-size:12px; color:var(--t3); flex-shrink:0; cursor:pointer; width:20px; text-align:center; display:inline-block; }
+  .vol-icon { font-size:calc(12px * var(--fs,1)); color:var(--t3); flex-shrink:0; cursor:pointer; width:20px; text-align:center; display:inline-block; }
   .vol-slider { flex:1; -webkit-appearance:none; appearance:none; height:3px; border-radius:2px; outline:none; cursor:pointer; background:linear-gradient(to right,var(--gold) 0%,var(--gold) var(--vol-pct,50%),var(--bg3) var(--vol-pct,50%),var(--bg3) 100%); }
   .vol-slider::-webkit-slider-thumb { -webkit-appearance:none; width:13px; height:13px; border-radius:50%; background:var(--gold); cursor:pointer; }
   .vol-slider::-moz-range-thumb { width:13px; height:13px; border:none; border-radius:50%; background:var(--gold); cursor:pointer; }
   /* PLAYING STRIP */
   .playing-strip { display:flex; flex-direction:column; gap:3px; margin-bottom:10px; max-height:132px; overflow-y:auto; scrollbar-width:thin; scrollbar-color:var(--bg3) transparent; }
-  .pl-item { display:flex; align-items:center; gap:8px; padding:4px; border-radius:7px; cursor:pointer; border:1px solid transparent; min-width:0; transition:background .12s; }
+  .pl-item { display:flex; align-items:center; gap:8px; padding:4px; border-radius:var(--r-md); cursor:pointer; border:1px solid transparent; min-width:0; transition:background .12s; }
   .pl-item:hover { background:var(--bg2); }
   .pl-item.selected { background:var(--gold-bg); border-color:var(--gold-border); }
-  .pl-art { width:32px; height:32px; border-radius:5px; background-color:var(--bg3); background-size:cover; background-position:center; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:14px; color:var(--t3); }
+  .pl-art { width:32px; height:32px; border-radius:var(--r-sm); background-color:var(--bg3); background-size:cover; background-position:center; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:calc(14px * var(--fs,1)); color:var(--t3); }
   .pl-info { flex:1; min-width:0; }
-  .pl-name { font-size:11px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--t1); }
-  .pl-track { font-size:10px; color:var(--t3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px; }
+  .pl-name { font-size:calc(11px * var(--fs,1)); font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--t1); }
+  .pl-track { font-size:calc(10px * var(--fs,1)); color:var(--t3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px; }
   .card.sidebar-top .playing-strip { flex:0 0 100%; flex-direction:row; overflow-x:auto; overflow-y:hidden; max-height:none; margin-bottom:0; }
   .card.sidebar-top .pl-item { flex:0 0 auto; width:170px; }
   .card.theme-retro .pl-item, .card.theme-retro .pl-art { border-radius:0!important; }
@@ -326,11 +330,11 @@ const CSS = `
   /* MAIN */
   .main { flex:1; display:flex; flex-direction:column; overflow:hidden; min-width:0; }
   .topbar { display:flex; align-items:center; gap:9px; padding:10px 13px; border-bottom:1px solid var(--border); flex-shrink:0; }
-  .search-wrap { flex:1; display:flex; align-items:center; background:var(--bg2); border:1px solid var(--border); border-radius:20px; padding:6px 11px; gap:7px; transition:border-color .14s; }
+  .search-wrap { flex:1; display:flex; align-items:center; background:var(--bg2); border:1px solid var(--border); border-radius:var(--r-md); padding:4px 11px; min-height:var(--ctl-h); gap:7px; transition:border-color .14s; }
   .search-wrap:focus-within { border-color:var(--gold-border); }
-  .search-inp { background:none; border:none; color:var(--t1); font-size:12.5px; outline:none; flex:1; font-family:inherit; }
+  .search-inp { background:none; border:none; color:var(--t1); font-size:calc(12.5px * var(--fs,1)); outline:none; flex:1; font-family:inherit; }
   .search-inp::placeholder { color:var(--t3); }
-  .search-clear { background:none; border:none; color:var(--t3); cursor:pointer; font-size:14px; line-height:1; padding:0; display:none; }
+  .search-clear { background:none; border:none; color:var(--t3); cursor:pointer; font-size:calc(14px * var(--fs,1)); line-height:1; padding:0; display:none; }
   .search-clear.visible { display:block; }
   .scroll { flex:1; overflow-y:auto; padding:13px; scrollbar-width:thin; scrollbar-color:var(--bg3) transparent; }
   .scroll::-webkit-scrollbar { width:4px; }
@@ -338,28 +342,28 @@ const CSS = `
   /* SECTIONS */
   .section { margin-bottom:22px; }
   .sec-hdr { display:flex; align-items:center; gap:8px; margin-bottom:11px; flex-wrap:wrap; }
-  .sec-title { font-size:13px; font-weight:600; color:var(--t1); }
-  .sec-count { font-size:10px; color:var(--t3); background:var(--bg2); padding:2px 7px; border-radius:10px; border:1px solid var(--border); }
+  .sec-title { font-size:calc(13px * var(--fs,1)); font-weight:600; color:var(--t1); }
+  .sec-count { font-size:calc(10px * var(--fs,1)); color:var(--t3); background:var(--bg2); padding:2px 7px; border-radius:var(--r-md); border:1px solid var(--border); }
   .sec-actions { display:flex; gap:5px; margin-left:auto; }
-  .sec-btn { background:var(--bg2); border:1px solid var(--border); color:var(--t2); font-size:10px; padding:3px 9px; border-radius:10px; cursor:pointer; font-family:inherit; transition:all .12s; white-space:nowrap; }
+  .sec-btn { background:var(--bg2); border:1px solid var(--border); color:var(--t2); font-size:calc(10px * var(--fs,1)); padding:3px 9px; border-radius:var(--r-md); cursor:pointer; font-family:inherit; transition:all .12s; white-space:nowrap; }
   .sec-btn:hover { background:var(--gold-bg); border-color:var(--gold-border); color:var(--gold); }
   /* ALBUM / RADIO GRID */
   .album-grid,.radio-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(var(--art-size,105px),1fr)); gap:11px; }
   .album-card { cursor:pointer; position:relative; }
   .album-card.now-playing .a-art-wrap { border-color:var(--gold); box-shadow:0 0 0 1px var(--gold); }
-  .a-art-wrap { width:100%; aspect-ratio:1; border-radius:8px; background:var(--bg2); margin-bottom:6px; position:relative; overflow:hidden; border:1px solid var(--border); transition:transform .14s,border-color .14s; display:flex; align-items:center; justify-content:center; }
+  .a-art-wrap { width:100%; aspect-ratio:1; border-radius:var(--r-lg); background:var(--bg2); margin-bottom:6px; position:relative; overflow:hidden; border:1px solid var(--border); transition:transform .14s,border-color .14s; display:flex; align-items:center; justify-content:center; }
   .album-card:hover .a-art-wrap { transform:translateY(-2px); }
   .a-art-wrap img { width:100%; height:100%; object-fit:cover; display:block; position:absolute; inset:0; }
   .a-art-wrap svg { flex-shrink:0; }
   .a-overlay { position:absolute; inset:0; background:rgba(0,0,0,.52); display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .14s; z-index:2; }
   .album-card:hover .a-overlay { opacity:1; }
-  .play-circle { width:36px; height:36px; background:var(--gold); border-radius:50%; display:flex; align-items:center; justify-content:center; color:#111; font-size:13px; transform:scale(.85); transition:transform .14s; }
+  .play-circle { width:36px; height:36px; background:var(--gold); border-radius:50%; display:flex; align-items:center; justify-content:center; color:#111; font-size:calc(13px * var(--fs,1)); transform:scale(.85); transition:transform .14s; }
   .album-card:hover .play-circle { transform:scale(1); }
-  .playing-badge { position:absolute; bottom:5px; left:5px; z-index:3; background:var(--gold); border-radius:4px; padding:2px 5px; font-size:9px; color:#111; font-weight:600; display:none; }
+  .playing-badge { position:absolute; bottom:5px; left:5px; z-index:3; background:var(--gold); border-radius:var(--r-sm); padding:2px 5px; font-size:calc(9px * var(--fs,1)); color:#111; font-weight:600; display:none; }
   .album-card.now-playing .playing-badge { display:block; }
-  .a-name { font-size:11.5px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--t1); }
-  .a-artist { font-size:10.5px; color:var(--t3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px; }
-  .a-year { font-size:10px; color:var(--t3); opacity:.7; }
+  .a-name { font-size:calc(11.5px * var(--fs,1)); font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--t1); }
+  .a-artist { font-size:calc(10.5px * var(--fs,1)); color:var(--t3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px; }
+  .a-year { font-size:calc(10px * var(--fs,1)); color:var(--t3); opacity:.7; }
   /* ARTIST GRID */
   .artist-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(var(--art-size,105px),1fr)); gap:13px; }
   .artist-card { cursor:pointer; text-align:center; }
@@ -367,64 +371,64 @@ const CSS = `
   .artist-card:hover .ar-img { border-color:var(--gold); transform:scale(1.04); }
   .ar-img img { width:100%; height:100%; object-fit:cover; }
   .ar-img svg { flex-shrink:0; }
-  .ar-name { font-size:11.5px; font-weight:500; }
+  .ar-name { font-size:calc(11.5px * var(--fs,1)); font-weight:500; }
   /* TRACK LIST */
-  .track-row { display:flex; align-items:center; gap:10px; padding:6px 8px; border-radius:7px; cursor:pointer; transition:background .1s; }
+  .track-row { display:flex; align-items:center; gap:10px; padding:6px 8px; border-radius:var(--r-md); cursor:pointer; transition:background .1s; }
   .track-row:hover { background:var(--bg2); }
   .track-row.playing { background:var(--gold-bg); }
-  .tr-num { width:18px; font-size:11px; color:var(--t3); text-align:center; flex-shrink:0; }
+  .tr-num { width:18px; font-size:calc(11px * var(--fs,1)); color:var(--t3); text-align:center; flex-shrink:0; }
   .track-row.playing .tr-num { color:var(--gold); }
-  .tr-art { width:calc(var(--art-size,105px) * 0.305); height:calc(var(--art-size,105px) * 0.305); border-radius:4px; background:var(--bg3); flex-shrink:0; overflow:hidden; display:flex; align-items:center; justify-content:center; font-size:15px; }
+  .tr-art { width:calc(var(--art-size,105px) * 0.305); height:calc(var(--art-size,105px) * 0.305); border-radius:var(--r-sm); background:var(--bg3); flex-shrink:0; overflow:hidden; display:flex; align-items:center; justify-content:center; font-size:calc(15px * var(--fs,1)); }
   .tr-art img { width:100%; height:100%; object-fit:cover; }
   .tr-art svg { flex-shrink:0; }
   .tr-info { flex:1; min-width:0; }
-  .tr-name { font-size:12.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tr-name { font-size:calc(12.5px * var(--fs,1)); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .track-row.playing .tr-name { color:var(--gold); font-weight:500; }
-  .tr-meta { font-size:11px; color:var(--t3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .tr-dur { font-size:11px; color:var(--t3); flex-shrink:0; }
+  .tr-meta { font-size:calc(11px * var(--fs,1)); color:var(--t3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tr-dur { font-size:calc(11px * var(--fs,1)); color:var(--t3); flex-shrink:0; }
   /* CONTEXT MENU */
-  .ctx-menu { position:fixed; background:var(--bg2); border:1px solid var(--border); border-radius:9px; padding:5px; z-index:999; min-width:160px; box-shadow:0 8px 24px rgba(0,0,0,.6); }
-  .ctx-item { display:flex; align-items:center; gap:9px; padding:8px 11px; border-radius:6px; cursor:pointer; font-size:12.5px; color:var(--t1); transition:background .1s; }
+  .ctx-menu { position:fixed; background:var(--bg2); border:1px solid var(--border); border-radius:var(--r-lg); padding:5px; z-index:999; min-width:160px; box-shadow:0 8px 24px rgba(0,0,0,.6); }
+  .ctx-item { display:flex; align-items:center; gap:9px; padding:8px 11px; border-radius:var(--r-md); cursor:pointer; font-size:calc(12.5px * var(--fs,1)); color:var(--t1); transition:background .1s; }
   .ctx-item:hover { background:var(--bg3); }
-  .ctx-ico { font-size:14px; width:18px; text-align:center; }
+  .ctx-ico { font-size:calc(14px * var(--fs,1)); width:18px; text-align:center; }
   /* TOAST */
-  .toast { position:absolute; left:50%; bottom:70px; transform:translateX(-50%); background:var(--bg3); color:var(--t1); border:1px solid var(--gold-border); padding:8px 14px; border-radius:20px; font-size:12px; z-index:1000; box-shadow:0 4px 16px rgba(0,0,0,.5); max-width:80%; text-align:center; pointer-events:none; }
+  .toast { position:absolute; left:50%; bottom:70px; transform:translateX(-50%); background:var(--bg3); color:var(--t1); border:1px solid var(--gold-border); padding:8px 14px; border-radius:var(--r-md); font-size:calc(12px * var(--fs,1)); z-index:1000; box-shadow:0 4px 16px rgba(0,0,0,.5); max-width:80%; text-align:center; pointer-events:none; }
   /* QUEUE PANEL */
   .queue-panel { position:absolute; inset:0; background:var(--bg-sidebar); display:flex; flex-direction:column; z-index:10; animation:slideUp .2s ease; }
   @keyframes slideUp { from { transform:translateY(20px); opacity:0; } to { transform:none; opacity:1; } }
   .queue-header { display:flex; align-items:center; gap:10px; padding:14px; border-bottom:1px solid var(--border); flex-shrink:0; }
-  .queue-art { width:48px; height:48px; border-radius:7px; background:var(--bg3); overflow:hidden; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:22px; }
+  .queue-art { width:48px; height:48px; border-radius:var(--r-md); background:var(--bg3); overflow:hidden; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:22px; }
   .queue-art img { width:100%; height:100%; object-fit:cover; }
   .queue-title-wrap { flex:1; min-width:0; }
-  .queue-title { font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .queue-subtitle { font-size:11px; color:var(--t3); margin-top:2px; }
-  .queue-close { background:none; border:none; color:var(--t2); font-size:18px; cursor:pointer; padding:4px; flex-shrink:0; }
+  .queue-title { font-size:calc(13px * var(--fs,1)); font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .queue-subtitle { font-size:calc(11px * var(--fs,1)); color:var(--t3); margin-top:2px; }
+  .queue-close { background:none; border:none; color:var(--t2); font-size:calc(18px * var(--fs,1)); cursor:pointer; padding:4px; flex-shrink:0; }
   .queue-close:hover { color:var(--t1); }
   .queue-scroll { flex:1; overflow-y:auto; padding:8px; scrollbar-width:thin; scrollbar-color:var(--bg3) transparent; }
-  .queue-item { display:flex; align-items:center; gap:9px; padding:7px 8px; border-radius:7px; cursor:pointer; transition:background .1s; }
+  .queue-item { display:flex; align-items:center; gap:9px; padding:7px 8px; border-radius:var(--r-md); cursor:pointer; transition:background .1s; }
   .queue-item:hover { background:var(--bg2); }
   .queue-item.active { background:var(--gold-bg); }
   .queue-item.active .qi-name { color:var(--gold); font-weight:500; }
   .queue-item.past { opacity:.45; }
-  .qi-num { width:20px; font-size:11px; color:var(--t3); text-align:center; flex-shrink:0; }
+  .qi-num { width:20px; font-size:calc(11px * var(--fs,1)); color:var(--t3); text-align:center; flex-shrink:0; }
   .queue-item.active .qi-num { color:var(--gold); }
-  .qi-art { width:30px; height:30px; border-radius:4px; background:var(--bg3); flex-shrink:0; overflow:hidden; display:flex; align-items:center; justify-content:center; font-size:13px; }
+  .qi-art { width:30px; height:30px; border-radius:var(--r-sm); background:var(--bg3); flex-shrink:0; overflow:hidden; display:flex; align-items:center; justify-content:center; font-size:calc(13px * var(--fs,1)); }
   .qi-art img { width:100%; height:100%; object-fit:cover; }
   .qi-info { flex:1; min-width:0; }
-  .qi-name { font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .qi-artist { font-size:10.5px; color:var(--t3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .qi-dur { font-size:11px; color:var(--t3); flex-shrink:0; }
+  .qi-name { font-size:calc(12px * var(--fs,1)); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .qi-artist { font-size:calc(10.5px * var(--fs,1)); color:var(--t3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .qi-dur { font-size:calc(11px * var(--fs,1)); color:var(--t3); flex-shrink:0; }
   /* ARTIST DETAIL */
   .artist-hdr { display:flex; gap:13px; margin-bottom:16px; align-items:flex-start; }
   .artist-hero { width:90px; height:90px; border-radius:50%; background:var(--bg2); flex-shrink:0; overflow:hidden; border:2px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:36px; }
   .artist-hero img { width:100%; height:100%; object-fit:cover; }
-  .artist-detail-name { font-size:17px; font-weight:600; margin-bottom:6px; }
-  .artist-detail-back { background:var(--bg2); color:var(--t1); border:1px solid var(--border); padding:6px 12px; border-radius:20px; font-size:12px; cursor:pointer; font-family:inherit; transition:background .13s; }
+  .artist-detail-name { font-size:calc(17px * var(--fs,1)); font-weight:600; margin-bottom:6px; }
+  .artist-detail-back { background:var(--bg2); color:var(--t1); border:1px solid var(--border); padding:6px 12px; border-radius:var(--r-md); font-size:calc(12px * var(--fs,1)); cursor:pointer; font-family:inherit; transition:background .13s; }
   .artist-detail-back:hover { background:var(--bg3); }
   /* SKELETON */
   .skeleton-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(105px,1fr)); gap:11px; }
-  .skel-art { width:100%; aspect-ratio:1; border-radius:8px; background:var(--bg2); margin-bottom:6px; animation:shimmer 1.4s ease infinite; }
-  .skel-line { height:10px; border-radius:5px; background:var(--bg2); margin-bottom:5px; animation:shimmer 1.4s ease infinite; }
+  .skel-art { width:100%; aspect-ratio:1; border-radius:var(--r-lg); background:var(--bg2); margin-bottom:6px; animation:shimmer 1.4s ease infinite; }
+  .skel-line { height:10px; border-radius:var(--r-sm); background:var(--bg2); margin-bottom:5px; animation:shimmer 1.4s ease infinite; }
   .skel-line.short { width:60%; }
   @keyframes shimmer { 0%,100% { opacity:.5; } 50% { opacity:1; } }
   /* STATE */
@@ -432,8 +436,8 @@ const CSS = `
   .lazy-sentinel { display:flex; align-items:center; justify-content:center; padding:16px 0 8px; min-height:30px; }
   .spinner { width:22px; height:22px; border:2px solid var(--bg3); border-top-color:var(--gold); border-radius:50%; animation:spin .75s linear infinite; }
   @keyframes spin { to { transform:rotate(360deg); } }
-  .err-txt { font-size:12px; line-height:1.6; color:var(--t2); }
-  .retry-btn { background:var(--gold-bg); color:var(--gold); border:1px solid var(--gold-border); padding:7px 16px; border-radius:20px; font-size:12px; font-weight:500; cursor:pointer; font-family:inherit; margin-top:4px; }
+  .err-txt { font-size:calc(12px * var(--fs,1)); line-height:1.6; color:var(--t2); }
+  .retry-btn { background:var(--gold-bg); color:var(--gold); border:1px solid var(--gold-border); padding:7px 16px; border-radius:var(--r-md); font-size:calc(12px * var(--fs,1)); font-weight:500; cursor:pointer; font-family:inherit; margin-top:4px; }
   .retry-btn:hover { background:var(--gold); color:#111; }
   /* Disable native touch interactions on scroll content */
   .scroll .album-card, .scroll .track-row, .scroll .artist-card { -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
@@ -500,6 +504,8 @@ class MABrowserCard extends HTMLElement {
     this._maUrl = config.ma_addon_slug ? '' : this._directMaUrl;
     this._maToken = (config.ma_token || '').trim();
     this._imgCache = {}; this._libCache = {};
+    const cardEl = this._built && this.shadowRoot && this.shadowRoot.querySelector('.card');
+    if (cardEl) cardEl.style.setProperty('--fs', this._fontScale());
     if (this._built && this.isConnected) this._init();
   }
 
@@ -533,6 +539,13 @@ class MABrowserCard extends HTMLElement {
     if (!m) return hex;
     const r = parseInt(m[1], 16), g = parseInt(m[2], 16), b = parseInt(m[3], 16);
     return `rgba(${r},${g},${b},${alpha})`;
+  }
+
+  // Text scale relative to the 13px default; font_size is the base size in px.
+  _fontScale() {
+    const base = Number(this._config.font_size);
+    const px = Number.isFinite(base) && base > 0 ? Math.min(28, Math.max(8, base)) : 13;
+    return +(px / 13).toFixed(4);
   }
 
   _build() {
@@ -617,11 +630,11 @@ class MABrowserCard extends HTMLElement {
       : '';
 
     this.shadowRoot.innerHTML = `<style>${CSS}</style>
-    <div class="card ${classes}" style="--card-height:${height}px;--sidebar:${sidebarWidth};--art-size:${tileSize}px${colorVarsStyle}">
+    <div class="card ${classes}" style="--card-height:${height}px;--sidebar:${sidebarWidth};--art-size:${tileSize}px;--fs:${this._fontScale()}${colorVarsStyle}">
       ${outerLogo}<div class="sidebar">${innerContent}</div>
       <div class="main">
         <div class="topbar"><div class="search-wrap">
-          <span style="font-size:14px;color:var(--t3)">&#x2315;&#xFE0E;</span>
+          <span style="font-size:calc(14px * var(--fs,1));color:var(--t3)">&#x2315;&#xFE0E;</span>
           <input class="search-inp" id="searchInp" type="text" placeholder="Search everything&hellip;" />
           <button class="search-clear" id="searchClear">&#x2715;&#xFE0E;</button>
         </div></div>
@@ -894,6 +907,13 @@ class MABrowserCard extends HTMLElement {
     };
     // Used by Play all / Shuffle all so they cover the whole list, not just what's loaded.
     st.loadAll=async()=>{ while(!st.done&&!st.gone) await fetchOnce(); };
+    // Used by Back navigation: make sure at least n items are loaded and rendered so a saved scroll offset is reachable.
+    st.restoreTo=async(n)=>{
+      while(st.items.length<n&&!st.done&&!st.gone) await fetchOnce();
+      while(!st.gone&&st.rendered<n&&st.rendered<st.items.length) renderChunk();
+      updateBadge();
+      if(st.rendered>=st.items.length&&st.done&&!st.gone) finish();
+    };
     const next=async()=>{
       if(st.gone||st.busy) return;
       if(st.rendered<st.items.length) renderChunk();
@@ -1554,12 +1574,28 @@ class MABrowserCard extends HTMLElement {
         const res=await this._search(artistName,100,false);
         albums=(res.albums??[]).filter(a=>this._artistName(a).toLowerCase().includes(artistName.toLowerCase()));
       }
+      albums=this._sortArtistAlbums(albums);
       const ph=this._placeholder('artist');
       const artAttrs=artUrl?`data-img="${this._esc(artUrl)}" data-placeholder-type="artist"`:'';
       this._scroll().innerHTML=`<div class="artist-hdr"><div class="artist-hero" ${artAttrs}>${ph}</div><div><div class="artist-detail-name">${this._esc(artistName)}</div><button class="artist-detail-back" data-action="back">&#x2190; Back</button></div></div>${artistTracks.length?this._section('Tracks',artistTracks.map((t,i)=>this._trackRowHtml(t,i+1)).join(''),'track-list',artistTracks.length,this._sectionActions(artistTracks)):''}${albums.length?this._section('Albums','','album-grid',albums.length):(artistTracks.length?'':'<div class="state-box">No albums found</div>')}`;
       this._hydrateImages(); this._attachClickHandler();
       if(albums.length) this._mountLazy({items:albums,render:a=>this._albumCardHtml(a)});
     } catch(e){this._err(e,()=>this._renderArtistDetail(artistName,artUrl,uri));}
+  }
+  // Album order on an artist page (config: artist_album_sort). MA returns these in no
+  // particular order, so this can sort them; 'off' (the default) keeps MA's order untouched.
+  _sortArtistAlbums(albums) {
+    const mode=this._config.artist_album_sort||'off';
+    if(mode==='off') return albums;
+    const year=a=>parseInt(a.year||(a.metadata?.release_date||'').slice(0,4),10)||0;
+    const name=a=>String(a.sort_name||a.name||'');
+    const byName=(a,b)=>name(a).localeCompare(name(b),undefined,{sensitivity:'base'});
+    const out=[...albums];
+    if(mode==='alpha') return out.sort(byName);
+    if(mode==='year_asc') // undated albums go last, not first
+      return out.sort((a,b)=>{ const ya=year(a),yb=year(b); if(!ya!==!yb) return ya?-1:1; return (ya-yb)||byName(a,b); });
+    if(mode==='year_desc') return out.sort((a,b)=>(year(b)-year(a))||byName(a,b)); // undated last
+    return albums; // unrecognised value: leave MA's order alone
   }
   // MA URIs look like {provider_instance_id_or_domain}://{media_type}/{item_id}
   // e.g. "library://album/50" or "spotify://playlist/1a2b3c".
@@ -1627,6 +1663,10 @@ class MABrowserCard extends HTMLElement {
     if(!items.length||!this._selectedPlayer){if(!this._selectedPlayer)alert('Select a player first');return;}
     // Same guard as _playMedia: don't fire music_assistant.play_media at a non-MA fallback player.
     if(this._playersAreFallback){this._toast('Waiting for Music Assistant players\u2026');return;}
+    // Clear the existing queue first (same as "Play now" / "Shuffle now"), otherwise the new
+    // items are appended after whatever was already queued and the old album plays on.
+    try { await this._hass.callService('media_player','clear_playlist',{entity_id:this._selectedPlayer}); }
+    catch(e) { console.warn('[MA Card] clear_playlist failed:', e); }
     if(shuffle) await this._hass.callService('media_player','shuffle_set',{entity_id:this._selectedPlayer,shuffle:true});
     await this._hass.callService('music_assistant','play_media',{entity_id:this._selectedPlayer,media_id:items[0].uri,media_type:items[0].media_type||'album',enqueue:'play'});
     for(let i=1;i<items.length;i++) await this._hass.callService('music_assistant','play_media',{entity_id:this._selectedPlayer,media_id:items[i].uri,media_type:items[i].media_type||'album',enqueue:'add'});
@@ -1798,10 +1838,20 @@ class MABrowserCard extends HTMLElement {
     scroll.addEventListener('touchmove',   this._boundTouchMove,  { passive: true });
     scroll.addEventListener('touchend',    this._boundTouchEnd,   { passive: true });
   }
-  _pushScreen() { if(this._curScreen) this._navStack.push(this._curScreen); }
-  _goBack() {
+  _pushScreen() {
+    if(!this._curScreen) return;
+    // Remember where the user was in the list so Back can put them there again.
+    this._navStack.push({ fn:this._curScreen, top:this._scroll().scrollTop, rendered:this._lazy?this._lazy.rendered:0 });
+  }
+  async _goBack() {
     const prev = this._navStack.pop();
-    if(prev) prev(); else this._renderView(this._view);
+    if(!prev) { this._renderView(this._view); return; }
+    await prev.fn();
+    // Re-render as many items as were showing before, then jump back to the old scroll offset.
+    if(prev.top>0 && this._lazy && this._lazy.restoreTo) {
+      try { await this._lazy.restoreTo(prev.rendered); } catch(e) { console.warn('[MA Card] scroll restore failed:',e); }
+      this._scroll().scrollTop = prev.top;
+    }
   }
   _handleClick(e) {
     this._dismissCtx();
@@ -2124,6 +2174,36 @@ const EDITOR_CSS = `
   .color-swatch{width:44px;height:34px;padding:0;border:1px solid var(--divider-color,#ccc);border-radius:6px;cursor:pointer;background:none;flex-shrink:0;}
   .color-hex{flex:1;padding:8px 10px;font-size:13px;font-family:monospace;background:var(--card-background-color,#fff);color:var(--primary-text-color,#000);border:1px solid var(--divider-color,#ccc);border-radius:4px;box-sizing:border-box;}
   .color-hex:focus{outline:none;border-color:var(--primary-color,#03a9f4);}
+  .pl-dd{border:1px solid var(--divider-color,#ccc);border-radius:6px;background:var(--card-background-color,#fff);}
+  .pl-dd summary{cursor:pointer;padding:8px 10px;font-size:13px;color:var(--primary-text-color);list-style:none;display:flex;align-items:center;justify-content:space-between;user-select:none;}
+  .pl-dd summary::-webkit-details-marker{display:none;}
+  .pl-dd summary::after{content:'\\25BE';font-size:12px;color:var(--secondary-text-color);transition:transform .15s;}
+  .pl-dd[open] summary::after{transform:rotate(180deg);}
+  .pl-dd[open] summary{border-bottom:1px solid var(--divider-color,#ccc);}
+  .pl-panel{padding:8px;}
+  .pl-filter{width:100%;padding:6px 9px;font-size:12.5px;margin-bottom:6px;background:var(--card-background-color,#fff);color:var(--primary-text-color,#000);border:1px solid var(--divider-color,#ccc);border-radius:4px;box-sizing:border-box;font-family:inherit;}
+  .pl-filter:focus{outline:none;border-color:var(--primary-color,#03a9f4);}
+  .pl-list{max-height:240px;overflow-y:auto;position:relative;}
+  .pl-opt{display:flex;align-items:center;gap:10px;padding:6px 4px;cursor:pointer;border-radius:4px;}
+  .pl-opt:hover{background:var(--secondary-background-color,#f5f5f5);}
+  .pl-opt input{width:16px;height:16px;flex-shrink:0;accent-color:var(--primary-color,#03a9f4);cursor:pointer;margin:0;}
+  .pl-num{min-width:18px;height:18px;border-radius:50%;background:var(--primary-color,#03a9f4);color:#fff;font-size:10px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .pl-num:empty{visibility:hidden;}
+  .pl-act{margin-left:auto;display:flex;gap:4px;flex-shrink:0;}
+  .pl-sep{border-top:1px solid var(--divider-color,#ccc);margin-top:4px;padding-top:10px;}
+  .pl-mv,.pl-rm{flex-shrink:0;width:22px;height:22px;padding:0;border:1px solid var(--divider-color,#ccc);border-radius:4px;background:var(--secondary-background-color,#f5f5f5);color:var(--primary-text-color);cursor:pointer;font-size:11px;line-height:1;}
+  .pl-mv{font-size:9px;}
+  .pl-mv:hover:not(:disabled){background:var(--primary-color,#03a9f4);color:#fff;border-color:var(--primary-color,#03a9f4);}
+  .pl-mv:disabled{opacity:.3;cursor:default;}
+  .pl-rm:hover{background:var(--error-color,#db4437);color:#fff;border-color:var(--error-color,#db4437);}
+  .pl-text{display:flex;flex-direction:column;min-width:0;}
+  .pl-name{font-size:13px;color:var(--primary-text-color);}
+  .pl-id{font-size:11px;color:var(--disabled-text-color);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .pl-tag{font-size:9px;font-weight:600;padding:1px 5px;border-radius:8px;background:var(--primary-color,#03a9f4);color:#fff;vertical-align:middle;}
+  .pl-warn{background:var(--warning-color,#f4b942);color:#000;}
+  .pl-empty{font-size:12px;color:var(--disabled-text-color);padding:8px 4px;}
+  .pl-clear{margin-top:8px;padding:5px 10px;font-size:12px;border:1px solid var(--divider-color,#ccc);border-radius:4px;background:var(--secondary-background-color,#f5f5f5);color:var(--primary-text-color);cursor:pointer;font-family:inherit;}
+  .pl-clear:hover{background:var(--primary-color,#03a9f4);color:#fff;border-color:var(--primary-color,#03a9f4);}
   .order-list{border:1px solid var(--divider-color,#ccc);border-radius:6px;overflow:hidden;margin-bottom:6px;}
   .order-row{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--card-background-color,#fff);}
   .order-row:not(:last-child){border-bottom:1px solid var(--divider-color,#eee);}
@@ -2137,7 +2217,7 @@ const EDITOR_CSS = `
 const DEFAULT_CUSTOM_COLORS = { accent:'#e5a00d', background:'#111113', surface:'#222228', elevated:'#2e2e38', text:'#f0f0f5', text_nav:'#9898aa', other_text:'#55555f', border:'#ffffff12' };
 
 class MABrowserCardEditor extends HTMLElement {
-  constructor(){super();this.attachShadow({mode:'open'});this._config={};this._pendingTimer=null;}
+  constructor(){super();this.attachShadow({mode:'open'});this._config={};this._pendingTimer=null;this._playersOpen=false;this._playersFilter='';this._playersScroll=0;}
   set hass(hass){const first=!this._hass;this._hass=hass;if(first&&this._config&&Object.keys(this._config).length)this._render();}
   setConfig(config){this._config={...config};this._render();}
   _fire(config){clearTimeout(this._pendingTimer);this._pendingTimer=setTimeout(()=>{this.dispatchEvent(new CustomEvent('config-changed',{detail:{config},bubbles:true,composed:true}));},800);}
@@ -2176,6 +2256,7 @@ class MABrowserCardEditor extends HTMLElement {
       +'<div class="toggle-row"><div><div class="toggle-label">Show title bar</div><div class="toggle-hint">Hide to save vertical space</div></div><label class="toggle-switch"><input type="checkbox" id="show_title"'+(st?' checked':'')+' /><span class="toggle-track"></span></label></div>'
       +'<div class="section-title">Appearance</div>'
       +'<div class="field-row"><label>Theme</label><select id="theme"><option value="auto"'+(th==='auto'?' selected':'')+'>Auto (follows HA theme)</option><option value="dark"'+(th==='dark'?' selected':'')+'>Dark</option><option value="light"'+(th==='light'?' selected':'')+'>Light</option><option value="retro"'+(th==='retro'?' selected':'')+'>Retro</option></select></div>'
+      +this._sliderField('font_size','Font size',this._v('font_size',13),9,22,1,'px','Base text size for the whole card (default 13)')
       +this._textField('title','Title text',c.title||'','Music','')
       +this._textField('subtitle','Subtitle text',c.subtitle||'','Music Assistant','')
       +this._textField('icon','Icon',c.icon||'','mdi:music','Any MDI icon e.g. mdi:speaker, mdi:headphones, mdi:radio')
@@ -2193,6 +2274,7 @@ class MABrowserCardEditor extends HTMLElement {
       +'</div>'
       +'<div class="section-title">Behaviour</div>'
       +'<div class="field-row"><label>Single click action</label><select id="click_action"><option value="play"'+(ca==='play'?' selected':'')+'>Play immediately (default)</option><option value="enqueue"'+(ca==='enqueue'?' selected':'')+'>Add to queue</option><option value="browse"'+(ca==='browse'?' selected':'')+'>Browse (show tracks)</option></select><div class="hint">Browse opens an album or playlist\u2019s track list instead of playing it (artists already open their albums this way). Requires an MA access token. Also available any time via right-click / long-press \u2192 "Browse tracks", regardless of this setting</div></div>'
+      +this._selectField('artist_album_sort','Artist page album order',[{value:'off',label:'Off (order provided by Music Assistant, default)'},{value:'year_desc',label:'Year: newest first'},{value:'year_asc',label:'Year: oldest first'},{value:'alpha',label:'Alphabetical (A-Z)'}],this._v('artist_album_sort','off'),'Order of albums when you open an artist')
       +'<div class="section-title">Content Types</div>'
       +'<div class="toggle-row"><div><div class="toggle-label">Show Podcasts</div><div class="toggle-hint">Adds a Podcasts section to the sidebar and search</div></div><label class="toggle-switch"><input type="checkbox" id="show_podcasts"'+(spc?' checked':'')+' /><span class="toggle-track"></span></label></div>'
       +'<div class="toggle-row"><div><div class="toggle-label">Show Audiobooks</div><div class="toggle-hint">Adds an Audiobooks section to the sidebar and search</div></div><label class="toggle-switch"><input type="checkbox" id="show_audiobooks"'+(sab?' checked':'')+' /><span class="toggle-track"></span></label></div>'
@@ -2221,9 +2303,94 @@ class MABrowserCardEditor extends HTMLElement {
       +this._selectField('default_player','Default player',mpOpts,c.default_player||'','Used when nothing is playing and no area player applies')
       +this._textField('area','Area override (optional)',c.area||'','e.g. kitchen','Area name or ID. Normally detected automatically; can also be set per device with ?area=kitchen on the dashboard URL')
       +this._toggleField('show_all_playing_players','Show all playing players','Strip above the player bar listing everything playing, with artwork. Sync groups appear once',this._v('show_all_playing_players',true))
-      +this._textField('players','Player entity IDs',(c.players||[]).join(', '),'Leave blank to auto-detect all MA players','Comma-separated e.g. media_player.kitchen, media_player.lounge')
+      +this._playersField()
       +'</div>';
     this._attachListeners();
+  }
+
+  // Dropdown checklist of media players. Nothing ticked = no `players` key = auto-detect.
+  // Ticked players are listed first, in the order they appear in the card; the rest follow (MA first).
+  _playersSel(){return [...new Set(this._config.players||[])];}
+  _playersRows(){
+    const states=this._hass?.states||{},sel=this._playersSel();
+    const isMA=st=>{const a=st.attributes||{};return a.app_id==='music_assistant'||!!a.mass_player_type||!!a.active_queue;};
+    const info=id=>{const st=states[id];return st?{id,name:st.attributes.friendly_name||id,ma:isMA(st),missing:false}:{id,name:id,ma:false,missing:true};};
+    const ticked=sel.map(info);
+    const rest=Object.keys(states).filter(e=>e.startsWith('media_player.')&&!sel.includes(e)).map(info)
+      .sort((a,b)=>(a.ma===b.ma?0:a.ma?-1:1)||a.name.localeCompare(b.name));
+    const row=(i,idx,sepTop)=>{
+      const on=idx>=0,e=this._esc(i.id);
+      return '<label class="pl-opt'+(sepTop?' pl-sep':'')+'" data-search="'+this._esc((i.name+' '+i.id).toLowerCase())+'">'
+        +'<input type="checkbox" data-entity="'+e+'"'+(on?' checked':'')+' />'
+        +'<span class="pl-num">'+(on?idx+1:'')+'</span>'
+        +'<span class="pl-text"><span class="pl-name">'+this._esc(i.name)+(i.ma?' <span class="pl-tag">MA</span>':'')+(i.missing?' <span class="pl-tag pl-warn">not found</span>':'')+'</span>'
+        +(i.name!==i.id?'<span class="pl-id">'+e+'</span>':'')+'</span>'
+        +((on||i.missing)?'<span class="pl-act">'
+          +(on?'<button type="button" class="pl-mv" data-dir="-1" data-entity="'+e+'" title="Move up"'+(idx===0?' disabled':'')+'>\u25B2</button>'
+              +'<button type="button" class="pl-mv" data-dir="1" data-entity="'+e+'" title="Move down"'+(idx===sel.length-1?' disabled':'')+'>\u25BC</button>':'')
+          +(i.missing?'<button type="button" class="pl-rm" data-entity="'+e+'" title="Remove from config">\u2715</button>':'')
+          +'</span>':'')
+        +'</label>';
+    };
+    return ticked.map((i,n)=>row(i,n,false)).concat(rest.map((i,n)=>row(i,-1,n===0&&ticked.length>0))).join('')
+      ||'<div class="pl-empty">No media players found</div>';
+  }
+  _playersField(){
+    const total=Object.keys(this._hass?.states||{}).filter(e=>e.startsWith('media_player.')).length+this._playersSel().length;
+    return '<div class="field-row"><label>Players to include</label>'
+      +'<details class="pl-dd" id="players_dd"'+(this._playersOpen?' open':'')+'><summary id="players_sum">'+this._playersSummary(this._playersSel().length)+'</summary>'
+      +'<div class="pl-panel">'
+      +(total>8?'<input type="text" id="players_filter" class="pl-filter" placeholder="Filter players\u2026" value="'+this._esc(this._playersFilter)+'" />':'')
+      +'<div class="pl-list" id="players_list">'+this._playersRows()+'</div>'
+      +'<button type="button" class="pl-clear" id="players_clear">Clear selection (auto-detect)</button>'
+      +'</div></details>'
+      +'<div class="hint">Tick the players to show in the card. Ticked players move to the top, numbered in the order they appear in the card \u2014 use \u25B2\u25BC to reorder. Leave none ticked to auto-detect all Music Assistant players.</div></div>';
+  }
+  _playersSummary(n){return n?n+' player'+(n===1?'':'s')+' selected':'Auto-detect all MA players';}
+  _attachPlayersListeners(){
+    const self=this,sr=this.shadowRoot;
+    const dd=sr.getElementById('players_dd'),list=sr.getElementById('players_list'),filter=sr.getElementById('players_filter');
+    if(!dd||!list)return;
+    const applyFilter=()=>{const q=(self._playersFilter||'').trim().toLowerCase();list.querySelectorAll('.pl-opt').forEach(o=>{o.style.display=(!q||o.dataset.search.includes(q))?'':'none';});};
+    const commit=(arr,focusSel)=>{self._set('players',arr.length?arr:undefined);rebuild(focusSel);};
+    const bind=()=>{
+      list.querySelectorAll('input[type=checkbox]').forEach(cb=>cb.addEventListener('change',()=>{
+        const cur=self._playersSel(),id=cb.dataset.entity,at=cur.indexOf(id);
+        if(cb.checked&&at<0)cur.push(id);else if(!cb.checked&&at>=0)cur.splice(at,1);
+        commit(cur);
+      }));
+      list.querySelectorAll('.pl-mv').forEach(btn=>btn.addEventListener('click',ev=>{
+        ev.preventDefault();ev.stopPropagation();
+        const cur=self._playersSel(),i=cur.indexOf(btn.dataset.entity),j=i+Number(btn.dataset.dir);
+        if(i<0||j<0||j>=cur.length)return;
+        [cur[i],cur[j]]=[cur[j],cur[i]];
+        commit(cur,'.pl-mv[data-entity="'+btn.dataset.entity+'"][data-dir="'+btn.dataset.dir+'"]');
+      }));
+      list.querySelectorAll('.pl-rm').forEach(btn=>btn.addEventListener('click',ev=>{
+        ev.preventDefault();ev.stopPropagation();
+        commit(self._playersSel().filter(e=>e!==btn.dataset.entity));
+      }));
+    };
+    const rebuild=focusSel=>{
+      const top=list.scrollTop;
+      list.innerHTML=self._playersRows();
+      bind();applyFilter();list.scrollTop=top;
+      const sum=sr.getElementById('players_sum');if(sum)sum.textContent=self._playersSummary(self._playersSel().length);
+      if(focusSel){
+        const el=list.querySelector(focusSel);
+        if(el){
+          if(!el.disabled)el.focus({preventScroll:true});
+          const row=el.closest('.pl-opt');   // keep the moved row visible inside the list
+          if(row.offsetTop<list.scrollTop)list.scrollTop=row.offsetTop;
+          else if(row.offsetTop+row.offsetHeight>list.scrollTop+list.clientHeight)list.scrollTop=row.offsetTop+row.offsetHeight-list.clientHeight;
+        }
+      }
+    };
+    dd.addEventListener('toggle',()=>{self._playersOpen=dd.open;});
+    list.addEventListener('scroll',()=>{self._playersScroll=list.scrollTop;});
+    sr.getElementById('players_clear').addEventListener('click',()=>commit([]));
+    if(filter)filter.addEventListener('input',()=>{self._playersFilter=filter.value;applyFilter();});
+    bind();applyFilter();list.scrollTop=self._playersScroll;
   }
 
   _textField(id,label,value,placeholder,hint){return '<div class="field-row"><label>'+label+'</label><input type="text" id="'+id+'" value="'+this._esc(value)+'" placeholder="'+this._esc(placeholder)+'" />'+(hint?'<div class="hint">'+hint+'</div>':'')+'</div>';}
@@ -2261,13 +2428,13 @@ class MABrowserCardEditor extends HTMLElement {
     sr.addEventListener('touchstart',e=>e.stopPropagation(),{passive:true});
     ['config_entry_id','ma_url','ma_addon_slug','title','subtitle','icon','area'].forEach(id=>{const el=sr.getElementById(id);if(el)el.addEventListener('change',()=>self._set(id,el.value.trim()||undefined));});
     const tokenEl=sr.getElementById('ma_token');if(tokenEl)tokenEl.addEventListener('change',()=>self._set('ma_token',tokenEl.value.trim()||undefined));
-    const playersEl=sr.getElementById('players');if(playersEl)playersEl.addEventListener('change',()=>{const val=playersEl.value.trim();self._set('players',val?val.split(',').map(s=>s.trim()).filter(Boolean):undefined);});
-    ['sidebar_position','player_position','theme','click_action','default_player'].forEach(id=>{const el=sr.getElementById(id);if(el)el.addEventListener('change',()=>self._set(id,el.value));});
+    self._attachPlayersListeners();
+    ['sidebar_position','player_position','theme','click_action','artist_album_sort','default_player'].forEach(id=>{const el=sr.getElementById(id);if(el)el.addEventListener('change',()=>self._set(id,el.value));});
     const showTitle=sr.getElementById('show_title');if(showTitle)showTitle.addEventListener('change',()=>self._set('show_title',showTitle.checked));
     const showPodcasts=sr.getElementById('show_podcasts');if(showPodcasts)showPodcasts.addEventListener('change',()=>self._set('show_podcasts',showPodcasts.checked));
     ['auto_follow','use_app_area','show_all_playing_players'].forEach(id=>{const el=sr.getElementById(id);if(el)el.addEventListener('change',()=>self._set(id,el.checked));});
     const showAudiobooks=sr.getElementById('show_audiobooks');if(showAudiobooks)showAudiobooks.addEventListener('change',()=>self._set('show_audiobooks',showAudiobooks.checked));
-    ['height','sidebar_width','tile_size','manual_hold_minutes'].forEach(id=>{
+    ['height','sidebar_width','tile_size','font_size','manual_hold_minutes'].forEach(id=>{
       const slider=sr.getElementById(id),numBox=sr.getElementById(id+'_num');if(!slider||!numBox)return;
       slider.addEventListener('input',()=>{numBox.value=slider.value;self._set(id,+slider.value,false);});
       numBox.addEventListener('change',()=>{const v=Math.min(+slider.max,Math.max(+slider.min,+numBox.value));slider.value=v;numBox.value=v;self._set(id,v,true);});
