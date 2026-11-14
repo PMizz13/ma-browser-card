@@ -35,7 +35,8 @@ A Music Assistant browser card for Home Assistant. Browse your music library - a
 - New queue management options (Clear the queue, add to the queue or replace it)
 - Fully customizable colour scheme
 - Customise dashboard order and search orders seperately
-- Audiobooks and podcasts are now in beta (If you experience any issues please report it via github)
+- Audiobooks and podcasts
+- Track all your currently playing entities or groups and switch easily between them
 
 ## Requirements
 
@@ -129,6 +130,7 @@ players:                       # Optional — limit to specific MA players
   - media_player.kitchen_speaker    # If omitted, auto-detects all MA players
   - media_player.living_room
 theme: auto                     # auto (default, copies dashboard theme), dark, light, retro
+font_size: 13                   # px size of font used in card 8-28
 sidebar_position: left          # left (default) or top (horizontal nav bar)
 sidebar_width: 195              # Sidebar width in px, left sidebar only (default: 195)
 player_position: bottom         # bottom (default) or top
@@ -153,6 +155,8 @@ click_action: play               # play (default), enqueue, or browse
                                   # of playing immediately (artists already do this).
                                   # Right-click/long-press always shows the full menu too,
                                   # including "Browse tracks", regardless of this setting
+artist_album_sort: off          # album order on an artist page: off (as returned by MA, default)
+                                #   | year_desc (newest first) | year_asc (oldest first) | alpha (A-Z)
 
 show_podcasts: false             # Optional — adds a Podcasts section to the sidebar and search
 show_audiobooks: false           # Optional — adds an Audiobooks section to the sidebar and search
@@ -247,11 +251,13 @@ show_all_playing_players: true  # strip above the player bar listing other playi
 | `favourite_tracks`   | No       | 0       | Set number of favourite tracks to display                        |
 | `continue_podcasts`  | No       | 10      | Requires `show_podcasts` + `ma_token`. Checks this many favourited podcasts for their next unfinished episode |
 | `continue_audiobooks`| No       | 10      | Requires `show_audiobooks` + `ma_token`. Number of in-progress audiobooks to show |
+| `album_artist_sort`  | No       | off      | Album order on an artist page: off (as returned by MA, default), year_desc (newest first), year_asc (oldest first), alpha (A-Z)o |
 | **Appearance**       |          |         |                                                                  |
 | `title`              | No       | Music   | Text for title card                                              |
 | `subtitle`           | No       | Music Assistant | Subtitle for card                                        |
 | `icon`               | No       | mdi:music | Icon for card (any mdi)                                        |
 | `theme`              | No       | auto    | Theme for card, (dark, light, retro, auto (use Home Assistant theme))   |
+| `font_size`          | No       | 13      | px size of font (8-28)  |
 | `custom_colors`      | No       | -       | Overrides the theme's palette (see below). Has little effect on the retro theme, which uses fixed colours |
 | `custom_colors.accent`| No      | `#e5a00d` | Highlights, play button, active nav, progress bar              |
 | `custom_colors.background`| No  | `#111113` | Outer card background                                           |
